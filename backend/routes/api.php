@@ -1,19 +1,22 @@
 <?php
 
-use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\Auth\AdminInviteController;
 use App\Http\Controllers\Auth\LoginController;
-use Illuminate\Http\Request;
+use App\Http\Controllers\Auth\GoogleController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+Route::prefix('auth')->group(function () {
+    Route::post('login', [LoginController::class, 'login']);
+    Route::post('register', [LoginController::class, 'register']);
+    Route::post('logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
+    
+    Route::get('google', [GoogleController::class, 'redirectToGoogle']);
+    Route::get('google/callback', [GoogleController::class, 'handleGoogleCallback']);
 });
 
-// Traditional Authentication Routes
-Route::post('auth/login', [LoginController::class, 'login']);
-Route::post('auth/register', [LoginController::class, 'register']);
-Route::middleware('auth:sanctum')->post('auth/logout', [LoginController::class, 'logout']);
-
-// Google OAuth Routes
-Route::get('auth/google', [GoogleController::class, 'redirectToGoogle']);
-Route::get('auth/google/callback', [GoogleController::class, 'handleGoogleCallback']);
+// Admin Invite Routes (protected by admin middleware in controller)
+Route::prefix('admin')->group(function () {
+    Route::post('invite', [AdminInviteController::class, 'invite']);
+    Route::get('invites', [AdminInviteController::class, 'listInvites']);
+    Route::post('invite/validate', [AdminInviteController::class, 'validateInvite']);
+});

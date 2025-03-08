@@ -2,8 +2,8 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-// import axios from 'axios';
 import axiosInstance from '@/lib/axios';
+import { UserRole } from '@/types/user';
 
 interface AuthResponse {
   token: string;
@@ -11,7 +11,13 @@ interface AuthResponse {
     id: number;
     name: string;
     email: string;
+    role: UserRole;
   };
+}
+
+interface AdminInviteResponse {
+  message: string;
+  invite_url: string;
 }
 
 interface ApiError {
@@ -48,6 +54,7 @@ export async function register(formData: FormData) {
       email: formData.get('email'),
       password: formData.get('password'),
       password_confirmation: formData.get('password_confirmation'),
+      invite_token: formData.get('invite_token'), // Optional invite token for admin registration
     });
 
     // @ts-expect-error Server Component
@@ -58,6 +65,36 @@ export async function register(formData: FormData) {
       return { error: error.response?.data?.message || 'Registration failed' };
     }
     return { error: 'An unexpected error occurred' };
+  }
+}
+
+export async function sendAdminInvite(email: string) {
+  try {
+    const response = await axiosInstance.post<AdminInviteResponse>('/admin/invite', {
+      email,
+    });
+
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isAxiosError(error)) {
+      return { success: false, error: error.response?.data?.message || 'Failed to send invite' };
+    }
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}
+
+export async function validateInvite(token: string) {
+  try {
+    const response = await axiosInstance.post('/admin/invite/validate', {
+      token,
+    });
+
+    return { success: true, data: response.data };
+  } catch (error) {
+    if (isAxiosError(error)) {
+      return { success: false, error: error.response?.data?.message || 'Invalid invite' };
+    }
+    return { success: false, error: 'An unexpected error occurred' };
   }
 }
 

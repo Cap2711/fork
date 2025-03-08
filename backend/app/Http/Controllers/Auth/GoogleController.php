@@ -20,7 +20,7 @@ class GoogleController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->user();
-            
+
             $user = User::where('google_id', $googleUser->id)->first();
 
             if (!$user) {
@@ -32,6 +32,7 @@ class GoogleController extends Controller
                     'avatar_url' => $googleUser->avatar,
                     'password' => encrypt(rand(1,10000)), // Random password as it's not needed for OAuth
                     'email_verified_at' => now(),
+                    'role' => 'user',
                 ]);
             }
 
