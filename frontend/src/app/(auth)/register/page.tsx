@@ -2,54 +2,32 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { register, getGoogleAuthUrl } from '@/app/_actions/auth-actions';
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    password_confirmation: '',
-  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to register');
+      const result = await register(new FormData(e.currentTarget));
+      if (result?.error) {
+        setError(result.error);
       }
-
-      // Store token and redirect
-      localStorage.setItem('token', data.token);
-      window.location.href = '/dashboard';
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register');
+    } catch {
+      setError('Failed to create account');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleLogin = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
+  const handleGoogleLogin = async () => {
+    const url = await getGoogleAuthUrl();
+    window.location.href = url;
   };
 
   return (
@@ -94,8 +72,6 @@ export default function RegisterPage() {
               name="name"
               type="text"
               required
-              value={formData.name}
-              onChange={handleChange}
               className="duo-input"
               placeholder="Your name"
             />
@@ -113,8 +89,6 @@ export default function RegisterPage() {
               type="email"
               autoComplete="email"
               required
-              value={formData.email}
-              onChange={handleChange}
               className="duo-input"
               placeholder="student@example.com"
             />
@@ -132,8 +106,6 @@ export default function RegisterPage() {
               type="password"
               autoComplete="new-password"
               required
-              value={formData.password}
-              onChange={handleChange}
               className="duo-input"
               placeholder="••••••••"
             />
@@ -151,8 +123,6 @@ export default function RegisterPage() {
               type="password"
               autoComplete="new-password"
               required
-              value={formData.password_confirmation}
-              onChange={handleChange}
               className="duo-input"
               placeholder="••••••••"
             />

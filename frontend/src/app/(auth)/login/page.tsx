@@ -2,45 +2,37 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { login } from '@/app/_actions/auth-actions';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleEmailLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to login');
+      const result = await login(new FormData(e.currentTarget));
+      if (result?.error) {
+        setError(result.error);
       }
-
-      // Store token and redirect
-      localStorage.setItem('token', data.token);
-      window.location.href = '/dashboard';
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to login');
+    } catch {
+      setError('Failed to login');
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
+    // Handle both localhost and IP address scenarios
+    const currentHost = window.location.hostname;
+    const isLocalhost = currentHost === 'localhost';
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+    const redirectUrl = isLocalhost ? 'http://localhost:3000' : `http://${currentHost}:3000`;
+    
+    window.location.href = `${baseUrl}/auth/google?redirect_url=${encodeURIComponent(redirectUrl)}`;
   };
 
   return (
@@ -86,8 +78,6 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
               className="duo-input"
               placeholder="student@example.com"
             />
@@ -105,8 +95,6 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
               className="duo-input"
               placeholder="••••••••"
             />

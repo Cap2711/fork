@@ -110,6 +110,6 @@ export async function logout() {
   redirect('/login');
 }
 
-export function getGoogleAuthUrl() {
+export async function getGoogleAuthUrl() {
   return `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
 }
