@@ -12,15 +12,17 @@ use Illuminate\Support\Facades\URL;
 class AdminInviteController extends Controller
 {
     public function __construct()
-    {
-        $this->middleware('auth:sanctum');
-        $this->middleware(function ($request, $next) {
-            if ($request->user()->role !== 'admin') {
-                return response()->json(['message' => 'Unauthorized'], 403);
-            }
-            return $next($request);
-        });
-    }
+        {
+            $this->middleware = [
+                'auth:sanctum',
+                function ($request, $next) {
+                    if ($request->user()->role !== 'admin') {
+                        return response()->json(['message' => 'Unauthorized'], 403);
+                    }
+                    return $next($request);
+                }
+            ];
+        }
 
     public function invite(Request $request)
     {
