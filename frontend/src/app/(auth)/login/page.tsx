@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { login } from '@/app/_actions/auth-actions';
+import { UserRole } from '@/types/user';
 
 export default function LoginPage() {
   const [error, setError] = useState('');
@@ -31,8 +32,31 @@ export default function LoginPage() {
     const isLocalhost = currentHost === 'localhost';
     const baseUrl = process.env.NEXT_PUBLIC_API_URL;
     const redirectUrl = isLocalhost ? 'http://localhost:3000' : `http://${currentHost}:3000`;
-    
-    window.location.href = `${baseUrl}/auth/google?redirect_url=${encodeURIComponent(redirectUrl)}`;
+  
+    // Create a function to handle the response from Google OAuth
+    const handleOAuthResponse = async (responseUrl: string) => {
+      try {
+        const url = new URL(responseUrl);
+        const token = url.searchParams.get('token');
+        const userData = JSON.parse(atob(url.searchParams.get('user') || ''));
+        
+        if (token) {
+          localStorage.setItem('token', token);
+          // Redirect based on user role
+          const role = userData.role;
+          if (role === UserRole.ADMIN) {
+            window.location.href = '/admin';
+          } else {
+            window.location.href = '/learn';
+          }
+        }
+      } catch (error) {
+        console.error('Google login error:', error);
+        setError('Failed to process Google login. Please try again.');
+      }
+    };
+
+    window.location.href = `${baseUrl}/auth/google?redirect_url=${encodeURIComponent(redirectUrl)}&callback=${encodeURIComponent(handleOAuthResponse.toString())}`;
   };
 
   return (

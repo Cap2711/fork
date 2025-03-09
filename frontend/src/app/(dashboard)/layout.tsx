@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu } from 'lucide-react';
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Menu } from "lucide-react";
 
 interface LayoutProps {
   children: ReactNode;
@@ -17,32 +17,26 @@ export default function DashboardLayout({ children }: LayoutProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (!token) {
-      router.push('/login');
+      router.push("/login");
     }
     setIsMobile(window.innerWidth < 768);
     const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, [router]);
 
   const NavContent = () => (
     <nav className="space-y-2">
       <Button variant="ghost" className="w-full justify-start" asChild>
-        <Link href="/learn">
-          Learning Dashboard
-        </Link>
+        <Link href="/learn">Learning Dashboard</Link>
       </Button>
       <Button variant="ghost" className="w-full justify-start" asChild>
-        <Link href="/admin">
-          Admin Panel
-        </Link>
+        <Link href="/admin">Admin Panel</Link>
       </Button>
       <Button variant="ghost" className="w-full justify-start" asChild>
-        <Link href="/profile">
-          Profile
-        </Link>
+        <Link href="/profile">Profile</Link>
       </Button>
     </nav>
   );
@@ -69,8 +63,8 @@ export default function DashboardLayout({ children }: LayoutProps) {
           <Button
             variant="ghost"
             onClick={() => {
-              localStorage.removeItem('token');
-              router.push('/login');
+              localStorage.removeItem("token");
+              router.push("/login");
             }}
           >
             Sign Out
@@ -95,8 +89,8 @@ export default function DashboardLayout({ children }: LayoutProps) {
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    localStorage.removeItem('token');
-                    router.push('/login');
+                    localStorage.removeItem("token");
+                    router.push("/login");
                   }}
                 >
                   Sign Out
@@ -104,9 +98,7 @@ export default function DashboardLayout({ children }: LayoutProps) {
               </div>
             </header>
           )}
-          <div className="p-8">
-            {children}
-          </div>
+          <div className="p-8">{children}</div>
         </main>
       </div>
     </div>

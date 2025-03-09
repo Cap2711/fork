@@ -38,7 +38,22 @@ export async function login(formData: FormData) {
 
     // @ts-expect-error Server Component
     cookies().set('token', response.data.token);
-    redirect('/dashboard');
+    // Set user data in an encrypted cookie
+    // @ts-expect-error Server Component
+    cookies().set('user_data', JSON.stringify({
+      id: response.data.user.id,
+      name: response.data.user.name,
+      email: response.data.user.email,
+      role: response.data.user.role
+    }), { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+
+
+    // Redirect based on user role
+    if (response.data.user.role === UserRole.ADMIN) {
+      redirect('/admin');
+    } else {
+      redirect('/learn');
+    }
   } catch (error) {
     if (isAxiosError(error)) {
       return { error: error.response?.data?.message || 'Login failed' };
@@ -59,7 +74,21 @@ export async function register(formData: FormData) {
 
     // @ts-expect-error Server Component
     cookies().set('token', response.data.token);
-    redirect('/dashboard');
+    // Set user data in an encrypted cookie
+    // @ts-expect-error Server Component
+    cookies().set('user_data', JSON.stringify({
+      id: response.data.user.id,
+      name: response.data.user.name,
+      email: response.data.user.email,
+      role: response.data.user.role
+    }), { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+
+    // Redirect based on user role
+    if (response.data.user.role === UserRole.ADMIN) {
+      redirect('/admin');
+    } else {
+      redirect('/learn');
+    }
   } catch (error) {
     if (isAxiosError(error)) {
       return { error: error.response?.data?.message || 'Registration failed' };
@@ -107,6 +136,8 @@ export async function logout() {
 
   // @ts-expect-error Server Component
   cookies().set('token', '');
+  // @ts-expect-error Server Component
+  cookies().set('user_data', '');
   redirect('/login');
 }
 
