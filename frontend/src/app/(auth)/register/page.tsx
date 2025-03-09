@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { register, getGoogleAuthUrl } from '@/app/_actions/auth-actions';
 
 export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -17,6 +19,10 @@ export default function RegisterPage() {
       const result = await register(new FormData(e.currentTarget));
       if (result?.error) {
         setError(result.error);
+      } else if (result.success) {
+        // Use client-side navigation after cookies are set
+        router.refresh(); // Refresh to update auth state
+        router.push(result.redirect);
       }
     } catch {
       setError('Failed to create account');

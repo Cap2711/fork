@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { login } from '@/app/_actions/auth-actions';
 import { UserRole } from '@/types/user';
 
 export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const router = useRouter();
 
   const handleEmailLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -18,6 +21,10 @@ export default function LoginPage() {
       const result = await login(new FormData(e.currentTarget));
       if (result?.error) {
         setError(result.error);
+      } else if (result.success) {
+        // Use client-side navigation after cookies are set
+        router.refresh(); // Refresh to update auth state
+        router.push(result.redirect);
       }
     } catch {
       setError('Failed to login');

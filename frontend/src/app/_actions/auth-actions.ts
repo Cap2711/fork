@@ -1,7 +1,6 @@
 'use server';
 
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { NextResponse } from 'next/server';
 import axiosInstance from '@/lib/axios';
 import { UserRole } from '@/types/user';
 
@@ -25,35 +24,63 @@ interface ApiError {
   status: number;
 }
 
+interface ErrorResult {
+  error: string;
+  success?: never;
+}
+
+interface SuccessResult {
+  error?: never;
+  success: true;
+  redirect: string;
+}
+
+type AuthResult = ErrorResult | SuccessResult;
+
 function isAxiosError(error: unknown): error is { response?: { data?: ApiError } } {
   return error != null && typeof error === 'object' && 'isAxiosError' in error;
 }
 
-export async function login(formData: FormData) {
+function setAuthCookies(response: AuthResponse): void {
+  // Create response with cookies
+  const res = new NextResponse();
+
+  // Set cookies
+  res.cookies.set({
+    name: 'token',
+    value: response.token,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+  });
+
+  res.cookies.set({
+    name: 'user_data',
+    value: JSON.stringify({
+      id: response.user.id,
+      name: response.user.name,
+      email: response.user.email,
+      role: response.user.role
+    }),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+  });
+}
+
+export async function login(formData: FormData): Promise<AuthResult> {
   try {
     const response = await axiosInstance.post<AuthResponse>('/auth/login', {
       email: formData.get('email'),
       password: formData.get('password'),
     });
 
-    // @ts-expect-error Server Component
-    cookies().set('token', response.data.token);
-    // Set user data in an encrypted cookie
-    // @ts-expect-error Server Component
-    cookies().set('user_data', JSON.stringify({
-      id: response.data.user.id,
-      name: response.data.user.name,
-      email: response.data.user.email,
-      role: response.data.user.role
-    }), { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    // Set cookies
+    setAuthCookies(response.data);
 
-
-    // Redirect based on user role
-    if (response.data.user.role === UserRole.ADMIN) {
-      redirect('/admin');
-    } else {
-      redirect('/learn');
-    }
+    // Return success with redirect URL
+    return { 
+      success: true, 
+      redirect: response.data.user.role === UserRole.ADMIN ? '/admin' : '/learn'
+    };
   } catch (error) {
     if (isAxiosError(error)) {
       return { error: error.response?.data?.message || 'Login failed' };
@@ -62,33 +89,24 @@ export async function login(formData: FormData) {
   }
 }
 
-export async function register(formData: FormData) {
+export async function register(formData: FormData): Promise<AuthResult> {
   try {
     const response = await axiosInstance.post<AuthResponse>('/auth/register', {
       name: formData.get('name'),
       email: formData.get('email'),
       password: formData.get('password'),
       password_confirmation: formData.get('password_confirmation'),
-      invite_token: formData.get('invite_token'), // Optional invite token for admin registration
+      invite_token: formData.get('invite_token'),
     });
 
-    // @ts-expect-error Server Component
-    cookies().set('token', response.data.token);
-    // Set user data in an encrypted cookie
-    // @ts-expect-error Server Component
-    cookies().set('user_data', JSON.stringify({
-      id: response.data.user.id,
-      name: response.data.user.name,
-      email: response.data.user.email,
-      role: response.data.user.role
-    }), { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    // Set cookies
+    setAuthCookies(response.data);
 
-    // Redirect based on user role
-    if (response.data.user.role === UserRole.ADMIN) {
-      redirect('/admin');
-    } else {
-      redirect('/learn');
-    }
+    // Return success with redirect URL
+    return { 
+      success: true, 
+      redirect: response.data.user.role === UserRole.ADMIN ? '/admin' : '/learn'
+    };
   } catch (error) {
     if (isAxiosError(error)) {
       return { error: error.response?.data?.message || 'Registration failed' };
@@ -134,11 +152,23 @@ export async function logout() {
     console.error('Logout error:', error);
   }
 
-  // @ts-expect-error Server Component
-  cookies().set('token', '');
-  // @ts-expect-error Server Component
-  cookies().set('user_data', '');
-  redirect('/login');
+  const res = new NextResponse();
+
+  // Clear cookies
+  res.cookies.set({
+    name: 'token',
+    value: '',
+    maxAge: 0,
+  });
+  res.cookies.set({
+    name: 'user_data',
+    value: '',
+    maxAge: 0,
+  });
+
+  // Create redirect response
+  const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
+  return NextResponse.redirect(new URL('/login', baseUrl));
 }
 
 export async function getGoogleAuthUrl() {
