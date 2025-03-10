@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import axiosInstance from '@/lib/axios';
 import { UserRole } from '@/types/user';
+import { cookies } from "next/headers";
 
 interface AuthResponse {
   token: string;
@@ -41,19 +42,25 @@ function isAxiosError(error: unknown): error is { response?: { data?: ApiError }
   return error != null && typeof error === 'object' && 'isAxiosError' in error;
 }
 
-function setAuthCookies(response: AuthResponse): void {
-  // Create response with cookies
-  const res = new NextResponse();
+async function setAuthCookies(response: AuthResponse): Promise<void> {
+   
+
+  console.log("data to be set in cookie: ", response)
+
+  const cookieStore = await cookies();
 
   // Set cookies
-  res.cookies.set({
+ const cookieToken =  cookieStore.set({
     name: 'token',
     value: response.token,
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    path: '/'
   });
 
-  res.cookies.set({
+  console.log("saved token in cookie: ", cookieToken)
+
+  const cookieUser = cookieStore.set({
     name: 'user_data',
     value: JSON.stringify({
       id: response.user.id,
@@ -63,7 +70,10 @@ function setAuthCookies(response: AuthResponse): void {
     }),
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    path: '/'
   });
+
+  console.log("saved user data in cookie: ", cookieUser)
 }
 
 export async function login(formData: FormData): Promise<AuthResult> {
@@ -74,7 +84,7 @@ export async function login(formData: FormData): Promise<AuthResult> {
     });
 
     // Set cookies
-    setAuthCookies(response.data);
+   await setAuthCookies(response.data);
 
     // Return success with redirect URL
     return { 
@@ -99,8 +109,10 @@ export async function register(formData: FormData): Promise<AuthResult> {
       invite_token: formData.get('invite_token'),
     });
 
+    console.log("registered user: ", response.data)
+
     // Set cookies
-    setAuthCookies(response.data);
+   await setAuthCookies(response.data);
 
     // Return success with redirect URL
     return { 
@@ -147,28 +159,29 @@ export async function validateInvite(token: string) {
 
 export async function logout() {
   try {
-    await axiosInstance.post('/auth/logout');
+    await axiosInstance.post("/auth/logout");
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error("Logout error:", error);
   }
 
-  const res = new NextResponse();
+  // Get the cookies instance
+  const cookieStore = await cookies();
 
   // Clear cookies
-  res.cookies.set({
-    name: 'token',
-    value: '',
+  cookieStore.set({
+    name: "token",
+    value: "",
     maxAge: 0,
   });
-  res.cookies.set({
-    name: 'user_data',
-    value: '',
+  cookieStore.set({
+    name: "user_data",
+    value: "",
     maxAge: 0,
   });
 
   // Create redirect response
-  const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
-  return NextResponse.redirect(new URL('/login', baseUrl));
+  const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
+  return NextResponse.redirect(new URL("/login", baseUrl));
 }
 
 export async function getGoogleAuthUrl() {
