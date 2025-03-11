@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Http\Controllers\Auth;
+namespace App\Http\Controllers\API\Auth;
 
-use App\Http\Controllers\Controller;
+use App\Http\Controllers\API\BaseAPIController;
 use App\Models\User;
 use App\Models\AdminInvite;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
-class LoginController extends Controller
+class LoginController extends BaseAPIController
 {
     public function login(Request $request)
     {
@@ -19,19 +19,16 @@ class LoginController extends Controller
         ]);
 
         if (!Auth::attempt($request->only('email', 'password'))) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+            return $this->sendError('Invalid credentials', ['email' => 'The provided credentials are incorrect.']);
         }
 
         $user = User::where('email', $request->email)->firstOrFail();
         $token = $user->createToken('auth-token')->plainTextToken;
 
-        return response()->json([
+        return $this->sendResponse([
             'token' => $token,
             'user' => $user,
-            'message' => 'Successfully logged in'
-        ]);
+        ], 'Successfully logged in');
     }
 
     public function register(Request $request)
@@ -73,19 +70,16 @@ class LoginController extends Controller
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
-        return response()->json([
+        return $this->sendResponse([
             'token' => $token,
             'user' => $user,
-            'message' => 'Successfully registered'
-        ], 201);
+        ], 'Successfully registered', 201);
     }
 
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json([
-            'message' => 'Successfully logged out'
-        ]);
+        return $this->sendResponse([], 'Successfully logged out');
     }
 }

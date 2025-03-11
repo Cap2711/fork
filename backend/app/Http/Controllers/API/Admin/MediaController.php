@@ -36,9 +36,9 @@ class MediaController extends BaseAPIController
             }
 
             $mediaFile = $model->addMedia(
-                file: $file,
-                collection: $request->collection_name,
-                options: [
+                $file,
+                $request->collection_name,
+                [
                     'disk' => $request->input('disk', config('filesystems.default')),
                     'conversions' => $request->input('conversions', []),
                     'custom_properties' => $request->input('custom_properties', [])
@@ -81,9 +81,9 @@ class MediaController extends BaseAPIController
             foreach ($request->file('files') as $file) {
                 try {
                     $mediaFile = $model->addMedia(
-                        file: $file,
-                        collection: $request->collection_name,
-                        options: [
+                        $file,
+                        $request->collection_name,
+                        [
                             'disk' => $request->input('disk', config('filesystems.default')),
                             'conversions' => $request->input('conversions', []),
                             'custom_properties' => $request->input('custom_properties', [])

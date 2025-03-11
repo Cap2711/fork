@@ -4,6 +4,7 @@ use App\Http\Controllers\API\LearningPathController;
 use App\Http\Controllers\API\UnitController;
 use App\Http\Controllers\API\LessonController;
 use App\Http\Controllers\API\SectionController;
+use App\Http\Controllers\API\Admin\InviteController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -55,6 +56,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('sections/{section}', [SectionController::class, 'update']);
         Route::delete('sections/{section}', [SectionController::class, 'destroy']);
         Route::post('lessons/{lesson}/sections/reorder', [SectionController::class, 'reorder']);
+    });
+
+    // Admin routes
+    Route::middleware('can:manage-admin')->prefix('admin')->group(function () {
+        // Admin invite routes
+        Route::post('invite', [InviteController::class, 'create']);
+        Route::get('invites', [InviteController::class, 'index']);
+        Route::post('invite/validate', [InviteController::class, 'validate']);
     });
 
     // User progress
