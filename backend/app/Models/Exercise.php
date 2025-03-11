@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasAuditLog;
+use App\Models\Traits\HasMedia;
+use App\Models\Traits\HasVersions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +12,15 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Exercise extends Model
 {
-    use HasFactory;
+    use HasFactory, HasVersions, HasAuditLog, HasMedia;
+
+    const AUDIT_AREA = 'exercises';
+
+    const TYPE_MULTIPLE_CHOICE = 'multiple_choice';
+    const TYPE_FILL_BLANK = 'fill_blank';
+    const TYPE_MATCHING = 'matching';
+    const TYPE_WRITING = 'writing';
+    const TYPE_SPEAKING = 'speaking';
 
     protected $fillable = [
         'section_id',
@@ -20,20 +31,19 @@ class Exercise extends Model
     ];
 
     protected $casts = [
-        'content' => 'json',
-        'answers' => 'json',
+        'content' => 'array',
+        'answers' => 'array',
         'order' => 'integer'
     ];
 
     /**
-     * Valid exercise types
+     * The attributes that should be version controlled.
      */
-    const TYPES = [
-        'multiple_choice',
-        'fill_blank',
-        'matching',
-        'writing',
-        'speaking'
+    protected array $versionedAttributes = [
+        'type',
+        'content',
+        'answers',
+        'order'
     ];
 
     /**
@@ -57,24 +67,13 @@ class Exercise extends Model
      */
     public function checkAnswer($userAnswer): bool
     {
-        switch ($this->type) {
-            case 'multiple_choice':
-                return $this->checkMultipleChoice($userAnswer);
-            
-            case 'fill_blank':
-                return $this->checkFillBlank($userAnswer);
-            
-            case 'matching':
-                return $this->checkMatching($userAnswer);
-            
-            case 'writing':
-            case 'speaking':
-                // These types require manual review
-                return false;
-            
-            default:
-                return false;
-        }
+        return match($this->type) {
+            self::TYPE_MULTIPLE_CHOICE => $this->checkMultipleChoice($userAnswer),
+            self::TYPE_FILL_BLANK => $this->checkFillBlank($userAnswer),
+            self::TYPE_MATCHING => $this->checkMatching($userAnswer),
+            self::TYPE_WRITING, self::TYPE_SPEAKING => false, // Requires manual review
+            default => false
+        };
     }
 
     /**
@@ -90,8 +89,17 @@ class Exercise extends Model
      */
     private function checkFillBlank($answer): bool
     {
-        // Case-insensitive comparison
-        return strtolower($answer) === strtolower($this->answers['correct']);
+        $correct = $this->answers['correct'];
+        
+        if (is_array($correct)) {
+            // Multiple acceptable answers
+            return collect($correct)
+                ->contains(fn($value) => 
+                    strtolower(trim($answer)) === strtolower(trim($value))
+                );
+        }
+
+        return strtolower(trim($answer)) === strtolower(trim($correct));
     }
 
     /**
@@ -113,16 +121,95 @@ class Exercise extends Model
     }
 
     /**
-     * Mark the exercise as completed for a user
+     * Get the export data structure
      */
-    public function complete(int $userId, array $metadata = []): void
+    public function getExportData(): array
     {
-        $this->progress()->updateOrCreate(
-            ['user_id' => $userId],
-            [
-                'status' => 'completed',
-                'meta_data' => $metadata
+        return [
+            'type' => $this->type,
+            'content' => $this->content,
+            'answers' => $this->answers,
+            'order' => $this->order,
+            'media' => $this->media->groupBy('collection_name')->toArray(),
+        ];
+    }
+
+    /**
+     * Import data from an export structure
+     */
+    public static function importData(array $data, Section $section): self
+    {
+        return static::create([
+            'section_id' => $section->id,
+            'type' => $data['type'],
+            'content' => $data['content'],
+            'answers' => $data['answers'],
+            'order' => $data['order']
+        ]);
+    }
+
+    /**
+     * Get all media collections available for exercises
+     */
+    public static function getMediaCollections(): array
+    {
+        return [
+            'question_images' => [
+                'max_files' => 3,
+                'conversions' => [
+                    'thumb' => ['width' => 100, 'height' => 100],
+                    'display' => ['width' => 600, 'height' => null]
+                ]
+            ],
+            'audio_prompts' => [
+                'max_files' => 1,
+                'allowed_types' => ['audio/mpeg', 'audio/wav']
+            ],
+            'answer_images' => [
+                'max_files' => 4,
+                'conversions' => [
+                    'thumb' => ['width' => 100, 'height' => 100],
+                    'display' => ['width' => 400, 'height' => null]
+                ]
             ]
-        );
+        ];
+    }
+
+    /**
+     * Get exercise validation rules by type
+     */
+    public static function getValidationRules(string $type): array
+    {
+        return match($type) {
+            self::TYPE_MULTIPLE_CHOICE => [
+                'content.question' => 'required|string',
+                'content.options' => 'required|array|min:2',
+                'content.options.*' => 'required|string',
+                'answers.correct' => 'required|string|in_array:content.options.*'
+            ],
+            self::TYPE_FILL_BLANK => [
+                'content.text' => 'required|string',
+                'content.blanks' => 'required|array|min:1',
+                'content.blanks.*' => 'required|integer',
+                'answers.correct' => 'required|array|size:content.blanks'
+            ],
+            self::TYPE_MATCHING => [
+                'content.items' => 'required|array|min:2',
+                'content.items.*' => 'required|string',
+                'content.matches' => 'required|array|size:content.items',
+                'content.matches.*' => 'required|string',
+                'answers.correct' => 'required|array|size:content.items'
+            ],
+            self::TYPE_WRITING => [
+                'content.prompt' => 'required|string',
+                'content.min_words' => 'required|integer|min:1',
+                'content.max_words' => 'required|integer|gt:content.min_words'
+            ],
+            self::TYPE_SPEAKING => [
+                'content.prompt' => 'required|string',
+                'content.duration' => 'required|integer|min:5|max:300'
+            ],
+            default => []
+        };
     }
 }

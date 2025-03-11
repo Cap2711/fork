@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,27 +10,28 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class UserProgress extends Model
 {
-    use HasFactory;
+    use HasFactory, HasAuditLog;
 
-    protected $fillable = [
-        'user_id',
-        'trackable_id',
-        'trackable_type',
-        'status',
-        'meta_data'
-    ];
+    const AUDIT_AREA = 'user_progress';
 
-    protected $casts = [
-        'meta_data' => 'json'
-    ];
-
-    /**
-     * Valid status values
-     */
     const STATUS_NOT_STARTED = 'not_started';
     const STATUS_IN_PROGRESS = 'in_progress';
     const STATUS_COMPLETED = 'completed';
     const STATUS_FAILED = 'failed';
+
+    protected $fillable = [
+        'user_id',
+        'trackable_type',
+        'trackable_id',
+        'status',
+        'meta_data',
+        'completed_at'
+    ];
+
+    protected $casts = [
+        'meta_data' => 'array',
+        'completed_at' => 'datetime'
+    ];
 
     /**
      * Get the user that owns the progress.
@@ -48,11 +50,159 @@ class UserProgress extends Model
     }
 
     /**
+     * Update progress status
+     */
+    public function updateStatus(string $status, array $metadata = []): bool
+    {
+        $this->status = $status;
+        
+        if ($status === self::STATUS_COMPLETED && !$this->completed_at) {
+            $this->completed_at = now();
+        }
+
+        if (!empty($metadata)) {
+            $this->meta_data = array_merge($this->meta_data ?? [], $metadata);
+        }
+
+        return $this->save();
+    }
+
+    /**
+     * Mark as completed
+     */
+    public function complete(array $metadata = []): bool
+    {
+        return $this->updateStatus(self::STATUS_COMPLETED, $metadata);
+    }
+
+    /**
+     * Mark as failed
+     */
+    public function fail(array $metadata = []): bool
+    {
+        return $this->updateStatus(self::STATUS_FAILED, $metadata);
+    }
+
+    /**
+     * Mark as in progress
+     */
+    public function startProgress(array $metadata = []): bool
+    {
+        return $this->updateStatus(self::STATUS_IN_PROGRESS, $metadata);
+    }
+
+    /**
+     * Reset progress
+     */
+    public function reset(): bool
+    {
+        return $this->updateStatus(self::STATUS_NOT_STARTED, []);
+    }
+
+    /**
+     * Check if completed
+     */
+    public function isCompleted(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED;
+    }
+
+    /**
+     * Check if failed
+     */
+    public function isFailed(): bool
+    {
+        return $this->status === self::STATUS_FAILED;
+    }
+
+    /**
+     * Check if in progress
+     */
+    public function isInProgress(): bool
+    {
+        return $this->status === self::STATUS_IN_PROGRESS;
+    }
+
+    /**
+     * Get time spent on this item
+     */
+    public function getTimeSpent(): int
+    {
+        return $this->meta_data['time_spent'] ?? 0;
+    }
+
+    /**
+     * Add time spent
+     */
+    public function addTimeSpent(int $seconds): bool
+    {
+        $currentTime = $this->getTimeSpent();
+        return $this->updateStatus($this->status, [
+            'time_spent' => $currentTime + $seconds
+        ]);
+    }
+
+    /**
+     * Get attempt count
+     */
+    public function getAttemptCount(): int
+    {
+        return $this->meta_data['attempts'] ?? 0;
+    }
+
+    /**
+     * Increment attempt count
+     */
+    public function incrementAttempts(): bool
+    {
+        $attempts = $this->getAttemptCount();
+        return $this->updateStatus($this->status, [
+            'attempts' => $attempts + 1
+        ]);
+    }
+
+    /**
+     * Get the last score
+     */
+    public function getLastScore(): ?float
+    {
+        return $this->meta_data['last_score'] ?? null;
+    }
+
+    /**
+     * Get the best score
+     */
+    public function getBestScore(): ?float
+    {
+        return $this->meta_data['best_score'] ?? null;
+    }
+
+    /**
+     * Update score
+     */
+    public function updateScore(float $score): bool
+    {
+        $bestScore = $this->getBestScore();
+        return $this->updateStatus($this->status, [
+            'last_score' => $score,
+            'best_score' => $bestScore === null ? $score : max($bestScore, $score)
+        ]);
+    }
+
+    /**
      * Scope a query to only include completed progress.
      */
     public function scopeCompleted($query)
     {
         return $query->where('status', self::STATUS_COMPLETED);
+    }
+
+    /**
+     * Scope a query to only include failed progress.
+     */
+    public function scopeFailed($query)
+    {
+        return $query->where('status', self::STATUS_FAILED);
     }
 
     /**
@@ -64,87 +214,18 @@ class UserProgress extends Model
     }
 
     /**
-     * Get the progress statistics for a user
+     * Get progress summary
      */
-    public static function getUserStatistics(int $userId): array
+    public function getSummary(): array
     {
-        $stats = [
-            'completed_learning_paths' => 0,
-            'completed_units' => 0,
-            'completed_lessons' => 0,
-            'completed_exercises' => 0,
-            'total_time_spent' => 0,
-            'quiz_average_score' => 0
+        return [
+            'status' => $this->status,
+            'completed_at' => $this->completed_at,
+            'time_spent' => $this->getTimeSpent(),
+            'attempts' => $this->getAttemptCount(),
+            'last_score' => $this->getLastScore(),
+            'best_score' => $this->getBestScore(),
+            'meta_data' => $this->meta_data
         ];
-
-        // Count completed items
-        $stats['completed_learning_paths'] = self::where('user_id', $userId)
-            ->where('trackable_type', LearningPath::class)
-            ->where('status', self::STATUS_COMPLETED)
-            ->count();
-
-        $stats['completed_units'] = self::where('user_id', $userId)
-            ->where('trackable_type', Unit::class)
-            ->where('status', self::STATUS_COMPLETED)
-            ->count();
-
-        $stats['completed_lessons'] = self::where('user_id', $userId)
-            ->where('trackable_type', Lesson::class)
-            ->where('status', self::STATUS_COMPLETED)
-            ->count();
-
-        $stats['completed_exercises'] = self::where('user_id', $userId)
-            ->where('trackable_type', Exercise::class)
-            ->where('status', self::STATUS_COMPLETED)
-            ->count();
-
-        // Calculate quiz average
-        $quizScores = self::where('user_id', $userId)
-            ->where('trackable_type', Quiz::class)
-            ->where('status', self::STATUS_COMPLETED)
-            ->get()
-            ->pluck('meta_data.score');
-
-        $stats['quiz_average_score'] = $quizScores->isNotEmpty() 
-            ? round($quizScores->average(), 2) 
-            : 0;
-
-        // Calculate total time spent from meta_data
-        $stats['total_time_spent'] = self::where('user_id', $userId)
-            ->whereNotNull('meta_data->time_spent')
-            ->get()
-            ->sum(function ($progress) {
-                return $progress->meta_data['time_spent'] ?? 0;
-            });
-
-        return $stats;
-    }
-
-    /**
-     * Get the next incomplete item for a user
-     */
-    public static function getNextIncompleteItem(int $userId, string $trackableType): ?Model
-    {
-        $lastCompleted = self::where('user_id', $userId)
-            ->where('trackable_type', $trackableType)
-            ->where('status', self::STATUS_COMPLETED)
-            ->orderByDesc('updated_at')
-            ->first();
-
-        if (!$lastCompleted) {
-            // If no completed items, get the first item of this type
-            return $trackableType::orderBy('id')->first();
-        }
-
-        // Get the next item based on order (if available) or ID
-        if (method_exists($lastCompleted->trackable, 'order')) {
-            return $trackableType::where('order', '>', $lastCompleted->trackable->order)
-                ->orderBy('order')
-                ->first();
-        }
-
-        return $trackableType::where('id', '>', $lastCompleted->trackable_id)
-            ->orderBy('id')
-            ->first();
     }
 }

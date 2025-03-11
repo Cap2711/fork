@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasAuditLog;
+use App\Models\Traits\HasVersions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +12,9 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Quiz extends Model
 {
-    use HasFactory;
+    use HasFactory, HasVersions, HasAuditLog;
+
+    const AUDIT_AREA = 'quizzes';
 
     protected $fillable = [
         'unit_id',
@@ -20,6 +24,14 @@ class Quiz extends Model
 
     protected $casts = [
         'passing_score' => 'integer'
+    ];
+
+    /**
+     * The attributes that should be version controlled.
+     */
+    protected array $versionedAttributes = [
+        'title',
+        'passing_score'
     ];
 
     /**
@@ -35,7 +47,7 @@ class Quiz extends Model
      */
     public function questions(): HasMany
     {
-        return $this->hasMany(QuizQuestion::class);
+        return $this->hasMany(QuizQuestion::class)->orderBy('order');
     }
 
     /**
@@ -68,9 +80,9 @@ class Quiz extends Model
     }
 
     /**
-     * Submit a quiz attempt for a user
+     * Submit a quiz attempt and record progress
      */
-    public function submit(int $userId, array $answers): array
+    public function submitAttempt(int $userId, array $answers): array
     {
         $score = $this->calculateScore($answers);
         $passed = $score >= $this->passing_score;
@@ -111,5 +123,64 @@ class Quiz extends Model
         return $progress->max(function ($attempt) {
             return $attempt->meta_data['score'] ?? 0;
         });
+    }
+
+    /**
+     * Get the export data structure
+     */
+    public function getExportData(): array
+    {
+        return [
+            'title' => $this->title,
+            'passing_score' => $this->passing_score,
+            'questions' => $this->questions->map->getExportData()->toArray()
+        ];
+    }
+
+    /**
+     * Import data from an export structure
+     */
+    public static function importData(array $data, Unit $unit): self
+    {
+        $quiz = static::create([
+            'unit_id' => $unit->id,
+            'title' => $data['title'],
+            'passing_score' => $data['passing_score']
+        ]);
+
+        foreach ($data['questions'] ?? [] as $questionData) {
+            QuizQuestion::importData($questionData, $quiz);
+        }
+
+        return $quiz;
+    }
+
+    /**
+     * Get quiz statistics
+     */
+    public function getStatistics(): array
+    {
+        $attempts = $this->progress()->get();
+        $totalAttempts = $attempts->count();
+
+        if ($totalAttempts === 0) {
+            return [
+                'total_attempts' => 0,
+                'average_score' => 0,
+                'pass_rate' => 0,
+                'completion_rate' => 0
+            ];
+        }
+
+        $passedAttempts = $attempts->filter(function ($attempt) {
+            return ($attempt->meta_data['score'] ?? 0) >= $this->passing_score;
+        })->count();
+
+        return [
+            'total_attempts' => $totalAttempts,
+            'average_score' => $attempts->avg(fn($a) => $a->meta_data['score'] ?? 0),
+            'pass_rate' => ($passedAttempts / $totalAttempts) * 100,
+            'completion_rate' => ($attempts->unique('user_id')->count() / User::count()) * 100
+        ];
     }
 }
