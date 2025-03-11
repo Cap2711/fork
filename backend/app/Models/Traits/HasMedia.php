@@ -9,7 +9,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Intervention\Image\ImageManager;
+use Intervention\Image\Image;
 
 trait HasMedia
 {
@@ -112,8 +112,7 @@ trait HasMedia
 
         if ($this->isImageFile($file)) {
             try {
-                $manager = new ImageManager(['driver' => 'gd']);
-                $image = $manager->read($file);
+                $image = Image::make($file->getRealPath());
                 $metadata['dimensions'] = [
                     'width' => $image->width(),
                     'height' => $image->height(),
@@ -157,7 +156,7 @@ trait HasMedia
         foreach ($conversions as $name => $conversion) {
             $fileName = sprintf(
                 '%s-%s.%s',
-                pathinfo($media->file_name, PATHINFO_FILENAME),
+                pathinfo($media->getAttribute('file_name'), PATHINFO_FILENAME),
                 $name,
                 $media->getExtension()
             );
@@ -169,23 +168,13 @@ trait HasMedia
             );
 
             try {
-                $manager = new ImageManager(['driver' => 'gd']);
-                $image = $manager->read($file);
+                $image = Image::make($file->getRealPath());
 
                 // Apply conversion operations
                 if (!empty($conversion['width']) || !empty($conversion['height'])) {
-                    $image->resize(
-                        $conversion['width'] ?? null,
-                        $conversion['height'] ?? null,
-                        function ($constraint) use ($conversion) {
-                            if ($conversion['aspect'] ?? true) {
-                                $constraint->aspectRatio();
-                            }
-                            if ($conversion['upsize'] ?? false) {
-                                $constraint->upsize();
-                            }
-                        }
-                    );
+                    $image->resize($conversion['width'] ?? null, $conversion['height'] ?? null, function ($constraint) {
+                        $constraint->aspectRatio();
+                    });
                 }
 
                 // Apply additional operations
@@ -226,8 +215,7 @@ trait HasMedia
         $sizes = [2048, 1024, 768, 480];
 
         try {
-            $manager = new ImageManager(['driver' => 'gd']);
-            $image = $manager->read($file);
+            $image = Image::make($file->getRealPath());
             $originalWidth = $image->width();
 
             foreach ($sizes as $size) {
@@ -237,7 +225,7 @@ trait HasMedia
 
                 $fileName = sprintf(
                     '%s-%dw.%s',
-                    pathinfo($media->file_name, PATHINFO_FILENAME),
+                    pathinfo($media->getAttribute('file_name'), PATHINFO_FILENAME),
                     $size,
                     $media->getExtension()
                 );

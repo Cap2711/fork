@@ -7,6 +7,7 @@ use App\Models\Exercise;
 use App\Models\UserProgress;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ExerciseController extends BaseAPIController
 {
@@ -76,7 +77,7 @@ class ExerciseController extends BaseAPIController
     private function getFeedback(Exercise $exercise, bool $isCorrect): string
     {
         if ($isCorrect) {
-            return array_random([
+            return \Illuminate\Support\Arr::random([
                 "¡Excelente! (Excellent!)",
                 "¡Muy bien! (Very good!)",
                 "¡Perfecto! (Perfect!)"

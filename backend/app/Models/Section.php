@@ -92,7 +92,7 @@ class Section extends Model
         return [
             'id' => $this->id,
             'title' => $this->title,
-            'content_preview' => str_limit(strip_tags($this->content), 200),
+            'content_preview' => \Illuminate\Support\Str::limit(strip_tags($this->content), 200),
             'order' => $this->order,
             'exercises_count' => $this->exercises()->count(),
             'media_count' => $this->getMediaCounts(),

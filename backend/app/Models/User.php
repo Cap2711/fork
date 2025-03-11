@@ -40,37 +40,23 @@ class User extends Authenticatable
         'last_activity_date' => 'datetime',
     ];
 
-    // Progress Tracking
-    public function unitProgress(): HasMany
+    /**
+     * Get all progress records for the user.
+     */
+    public function progress(): HasMany
     {
-        return $this->hasMany(UserUnitProgress::class);
+        return $this->hasMany(UserProgress::class);
     }
 
-    public function lessonProgress(): HasMany
+    /**
+     * Helper methods for checking progress
+     */
+    public function getProgressFor($model): ?UserProgress
     {
-        return $this->hasMany(UserLessonProgress::class);
-    }
-
-    // Content Completion Tracking
-    public function completedVocabulary(): BelongsToMany
-    {
-        return $this->belongsToMany(VocabularyWord::class, 'user_vocabulary')
-            ->withPivot(['lesson_id', 'completed_at'])
-            ->withTimestamps();
-    }
-
-    public function completedGrammar(): BelongsToMany
-    {
-        return $this->belongsToMany(GrammarExercise::class, 'user_grammar')
-            ->withPivot(['lesson_id', 'completed_at'])
-            ->withTimestamps();
-    }
-
-    public function completedReading(): BelongsToMany
-    {
-        return $this->belongsToMany(ReadingPassage::class, 'user_reading')
-            ->withPivot(['lesson_id', 'completed_at'])
-            ->withTimestamps();
+        return $this->progress()
+            ->where('trackable_type', get_class($model))
+            ->where('trackable_id', $model->id)
+            ->first();
     }
 
     // Streak Management
@@ -123,15 +109,28 @@ class User extends Authenticatable
     // Progress Summary
     public function getProgressSummary(): array
     {
-        $completedLessons = $this->lessonProgress()
-            ->where('completed', true)
+        $progress = $this->progress();
+        
+        $completedLessons = $progress
+            ->where('trackable_type', Lesson::class)
+            ->where('status', UserProgress::STATUS_COMPLETED)
             ->count();
 
         $totalUnits = Unit::count();
-        $completedUnits = Unit::whereHas('userProgress', function ($query) {
-            $query->where('user_id', $this->id)
-                ->where('level', '>', 0);
-        })->count();
+        $completedUnits = $progress
+            ->where('trackable_type', Unit::class)
+            ->where('status', UserProgress::STATUS_COMPLETED)
+            ->count();
+
+        $vocabularyMastered = $progress
+            ->where('trackable_type', VocabularyItem::class)
+            ->where('status', UserProgress::STATUS_COMPLETED)
+            ->count();
+
+        $exercisesCompleted = $progress
+            ->where('trackable_type', Exercise::class)
+            ->where('status', UserProgress::STATUS_COMPLETED)
+            ->count();
 
         return [
             'completed_lessons' => $completedLessons,
@@ -140,9 +139,8 @@ class User extends Authenticatable
             'longest_streak' => $this->longest_streak,
             'completed_units' => $completedUnits,
             'total_units' => $totalUnits,
-            'vocabulary_mastered' => $this->completedVocabulary()->count(),
-            'grammar_mastered' => $this->completedGrammar()->count(),
-            'reading_completed' => $this->completedReading()->count(),
+            'vocabulary_mastered' => $vocabularyMastered,
+            'exercises_completed' => $exercisesCompleted,
         ];
     }
 

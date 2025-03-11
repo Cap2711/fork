@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\API\BaseAPIController;
 use App\Models\AuditLog;
-use App\Models\Vocabulary;
+use App\Models\VocabularyItem;
 use App\Http\Requests\API\Vocabulary\StoreVocabularyRequest;
 use App\Http\Requests\API\Vocabulary\UpdateVocabularyRequest;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +17,7 @@ class AdminVocabularyController extends BaseAPIController
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Vocabulary::query();
+        $query = VocabularyItem::query();
 
         // Apply filters
         if ($request->has('status')) {
@@ -57,7 +57,7 @@ class AdminVocabularyController extends BaseAPIController
      */
     public function store(StoreVocabularyRequest $request): JsonResponse
     {
-        $vocabulary = Vocabulary::create($request->validated());
+        $vocabulary = VocabularyItem::create($request->validated());
 
         // Log the creation for audit trail
         AuditLog::log(
@@ -74,7 +74,7 @@ class AdminVocabularyController extends BaseAPIController
     /**
      * Display the specified vocabulary item.
      */
-    public function show(Request $request, Vocabulary $vocabulary): JsonResponse
+    public function show(Request $request, VocabularyItem $vocabulary): JsonResponse
     {
         // Load relationships if requested
         if ($request->has('with_lessons')) {
@@ -92,7 +92,7 @@ class AdminVocabularyController extends BaseAPIController
     /**
      * Update the specified vocabulary item.
      */
-    public function update(UpdateVocabularyRequest $request, Vocabulary $vocabulary): JsonResponse
+    public function update(UpdateVocabularyRequest $request, VocabularyItem $vocabulary): JsonResponse
     {
         $oldData = $vocabulary->toArray();
         $vocabulary->update($request->validated());
@@ -112,7 +112,7 @@ class AdminVocabularyController extends BaseAPIController
     /**
      * Remove the specified vocabulary item.
      */
-    public function destroy(Request $request, Vocabulary $vocabulary): JsonResponse
+    public function destroy(Request $request, VocabularyItem $vocabulary): JsonResponse
     {
         // Prevent deletion of published vocabulary items
         if ($vocabulary->status === 'published') {
@@ -137,7 +137,7 @@ class AdminVocabularyController extends BaseAPIController
     /**
      * Update the status of a vocabulary item.
      */
-    public function updateStatus(Request $request, Vocabulary $vocabulary): JsonResponse
+    public function updateStatus(Request $request, VocabularyItem $vocabulary): JsonResponse
     {
         $request->validate([
             'status' => ['required', 'string', 'in:draft,published,archived']
@@ -179,7 +179,7 @@ class AdminVocabularyController extends BaseAPIController
         $importedItems = [];
 
         foreach ($items as $item) {
-            $vocabulary = Vocabulary::create($item);
+            $vocabulary = VocabularyItem::create($item);
             $importedItems[] = $vocabulary;
 
             // Log the creation for audit trail
@@ -200,7 +200,7 @@ class AdminVocabularyController extends BaseAPIController
      */
     public function export(Request $request): JsonResponse
     {
-        $query = Vocabulary::query();
+        $query = VocabularyItem::query();
 
         // Apply filters
         if ($request->has('status')) {
