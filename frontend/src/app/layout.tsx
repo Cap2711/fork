@@ -1,39 +1,24 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { RootProvider } from "./providers/root-provider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "English Learning | K-9",
-  description: "Interactive English learning platform for K-9 students",
+  title: "Language Learning Platform",
+  description: "Learn languages through interactive exercises and structured lessons",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
-      <head>
-        <link 
-          href="https://fonts.googleapis.com/css2?family=Material+Icons+Outlined"
-          rel="stylesheet"
-        />
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className={inter.className}>
+        <RootProvider>{children}</RootProvider>
       </body>
     </html>
   );

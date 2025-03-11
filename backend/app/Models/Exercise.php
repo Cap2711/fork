@@ -1,0 +1,215 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Traits\HasAuditLog;
+use App\Models\Traits\HasMedia;
+use App\Models\Traits\HasVersions;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+
+class Exercise extends Model
+{
+    use HasFactory, HasVersions, HasAuditLog, HasMedia;
+
+    const AUDIT_AREA = 'exercises';
+
+    const TYPE_MULTIPLE_CHOICE = 'multiple_choice';
+    const TYPE_FILL_BLANK = 'fill_blank';
+    const TYPE_MATCHING = 'matching';
+    const TYPE_WRITING = 'writing';
+    const TYPE_SPEAKING = 'speaking';
+
+    protected $fillable = [
+        'section_id',
+        'type',
+        'content',
+        'answers',
+        'order'
+    ];
+
+    protected $casts = [
+        'content' => 'array',
+        'answers' => 'array',
+        'order' => 'integer'
+    ];
+
+    /**
+     * The attributes that should be version controlled.
+     */
+    protected array $versionedAttributes = [
+        'type',
+        'content',
+        'answers',
+        'order'
+    ];
+
+    /**
+     * Get the section that owns the exercise.
+     */
+    public function section(): BelongsTo
+    {
+        return $this->belongsTo(Section::class);
+    }
+
+    /**
+     * Get all progress records for this exercise.
+     */
+    public function progress(): MorphMany
+    {
+        return $this->morphMany(UserProgress::class, 'trackable');
+    }
+
+    /**
+     * Check if the given answer is correct
+     */
+    public function checkAnswer($userAnswer): bool
+    {
+        return match($this->type) {
+            self::TYPE_MULTIPLE_CHOICE => $this->checkMultipleChoice($userAnswer),
+            self::TYPE_FILL_BLANK => $this->checkFillBlank($userAnswer),
+            self::TYPE_MATCHING => $this->checkMatching($userAnswer),
+            self::TYPE_WRITING, self::TYPE_SPEAKING => false, // Requires manual review
+            default => false
+        };
+    }
+
+    /**
+     * Check multiple choice answer
+     */
+    private function checkMultipleChoice($answer): bool
+    {
+        return $answer === $this->answers['correct'];
+    }
+
+    /**
+     * Check fill in the blank answer
+     */
+    private function checkFillBlank($answer): bool
+    {
+        $correct = $this->answers['correct'];
+        
+        if (is_array($correct)) {
+            // Multiple acceptable answers
+            return collect($correct)
+                ->contains(fn($value) => 
+                    strtolower(trim($answer)) === strtolower(trim($value))
+                );
+        }
+
+        return strtolower(trim($answer)) === strtolower(trim($correct));
+    }
+
+    /**
+     * Check matching answer
+     */
+    private function checkMatching($answers): bool
+    {
+        if (!is_array($answers) || count($answers) !== count($this->answers['correct'])) {
+            return false;
+        }
+
+        foreach ($this->answers['correct'] as $key => $value) {
+            if (!isset($answers[$key]) || $answers[$key] !== $value) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the export data structure
+     */
+    public function getExportData(): array
+    {
+        return [
+            'type' => $this->type,
+            'content' => $this->content,
+            'answers' => $this->answers,
+            'order' => $this->order,
+            'media' => $this->media->groupBy('collection_name')->toArray(),
+        ];
+    }
+
+    /**
+     * Import data from an export structure
+     */
+    public static function importData(array $data, Section $section): self
+    {
+        return static::create([
+            'section_id' => $section->id,
+            'type' => $data['type'],
+            'content' => $data['content'],
+            'answers' => $data['answers'],
+            'order' => $data['order']
+        ]);
+    }
+
+    /**
+     * Get all media collections available for exercises
+     */
+    public static function getMediaCollections(): array
+    {
+        return [
+            'question_images' => [
+                'max_files' => 3,
+                'conversions' => [
+                    'thumb' => ['width' => 100, 'height' => 100],
+                    'display' => ['width' => 600, 'height' => null]
+                ]
+            ],
+            'audio_prompts' => [
+                'max_files' => 1,
+                'allowed_types' => ['audio/mpeg', 'audio/wav']
+            ],
+            'answer_images' => [
+                'max_files' => 4,
+                'conversions' => [
+                    'thumb' => ['width' => 100, 'height' => 100],
+                    'display' => ['width' => 400, 'height' => null]
+                ]
+            ]
+        ];
+    }
+
+    /**
+     * Get exercise validation rules by type
+     */
+    public static function getValidationRules(string $type): array
+    {
+        return match($type) {
+            self::TYPE_MULTIPLE_CHOICE => [
+                'content.question' => 'required|string',
+                'content.options' => 'required|array|min:2',
+                'content.options.*' => 'required|string',
+                'answers.correct' => 'required|string|in_array:content.options.*'
+            ],
+            self::TYPE_FILL_BLANK => [
+                'content.text' => 'required|string',
+                'content.blanks' => 'required|array|min:1',
+                'content.blanks.*' => 'required|integer',
+                'answers.correct' => 'required|array|size:content.blanks'
+            ],
+            self::TYPE_MATCHING => [
+                'content.items' => 'required|array|min:2',
+                'content.items.*' => 'required|string',
+                'content.matches' => 'required|array|size:content.items',
+                'content.matches.*' => 'required|string',
+                'answers.correct' => 'required|array|size:content.items'
+            ],
+            self::TYPE_WRITING => [
+                'content.prompt' => 'required|string',
+                'content.min_words' => 'required|integer|min:1',
+                'content.max_words' => 'required|integer|gt:content.min_words'
+            ],
+            self::TYPE_SPEAKING => [
+                'content.prompt' => 'required|string',
+                'content.duration' => 'required|integer|min:5|max:300'
+            ],
+            default => []
+        };
+    }
+}

@@ -23,9 +23,29 @@ axiosInstance.interceptors.request.use(
   }
 );
 
+// Define API response type for BaseAPIController format
+interface ApiBaseResponse {
+  success: boolean;
+  data: any;
+  message: string;
+}
+
 // Response interceptor for error handling
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Extract the actual data from the response using our BaseAPIController format
+    const responseData = response.data as ApiBaseResponse;
+    if (responseData && typeof responseData.success !== 'undefined') {
+      // Return the actual data and message
+      return {
+        ...response,
+        data: responseData.data || {},
+        message: responseData.message || '',
+        success: responseData.success
+      };
+    }
+    return response;
+  },
   async (error) => {
     // Check if error is from axios
     if (error?.isAxiosError) {
@@ -34,8 +54,13 @@ axiosInstance.interceptors.response.use(
         const cookieStore = await cookies();
         cookieStore.set("token", "", { maxAge: 0 }); // This effectively deletes the cookie
       }
-
-      throw new Error(error.response?.data?.message || error.message);
+      
+      // Extract error message from our BaseAPIController format
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message;
+      
+      throw new Error(errorMessage);
     }
     throw new Error("An unexpected error occurred");
   }
@@ -44,7 +69,7 @@ axiosInstance.interceptors.response.use(
 export interface ApiResponse<T> {
   data: T;
   message: string;
-  status: number;
+  success: boolean;
 }
 
 export default axiosInstance;
