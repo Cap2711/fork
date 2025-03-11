@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\API\BaseAPIController;
+use App\Models\AuditLog;
 use App\Models\Vocabulary;
 use App\Http\Requests\API\Vocabulary\StoreVocabularyRequest;
 use App\Http\Requests\API\Vocabulary\UpdateVocabularyRequest;
@@ -59,11 +60,13 @@ class AdminVocabularyController extends BaseAPIController
         $vocabulary = Vocabulary::create($request->validated());
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($vocabulary)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $request->validated()])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'vocabulary',
+            $vocabulary,
+            [],
+            $request->validated()
+        );
 
         return $this->sendCreatedResponse($vocabulary, 'Vocabulary item created successfully.');
     }
@@ -95,14 +98,13 @@ class AdminVocabularyController extends BaseAPIController
         $vocabulary->update($request->validated());
 
         // Log the update for audit trail
-        activity()
-            ->performedOn($vocabulary)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::log(
+            'update',
+            'vocabulary',
+            $vocabulary,
+            $oldData,
+            $request->validated()
+        );
 
         return $this->sendResponse($vocabulary, 'Vocabulary item updated successfully.');
     }
@@ -114,18 +116,20 @@ class AdminVocabularyController extends BaseAPIController
     {
         // Prevent deletion of published vocabulary items
         if ($vocabulary->status === 'published') {
-            return $this->sendError('Cannot delete a published vocabulary item. Archive it first.', 422);
+            return $this->sendError('Cannot delete a published vocabulary item. Archive it first.',['error' => 'Cannot delete a published vocabulary item. Archive it first.'], 422);
         }
 
         $data = $vocabulary->toArray();
         $vocabulary->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($vocabulary)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'vocabulary',
+            $vocabulary,
+            $data,
+            []
+        );
 
         return $this->sendNoContentResponse();
     }
@@ -144,15 +148,15 @@ class AdminVocabularyController extends BaseAPIController
         $vocabulary->save();
 
         // Log the status change for audit trail
-        activity()
-            ->performedOn($vocabulary)
-            ->causedBy($request->user())
-            ->withProperties([
+        AuditLog::log(
+            'status_updated',
+            'vocabulary',
+            $vocabulary,
+            [],
+            [
                 'old_status' => $oldStatus,
                 'new_status' => $request->status
-            ])
-            ->log('status_updated');
-
+            ]);
         return $this->sendResponse($vocabulary, 'Vocabulary item status updated successfully.');
     }
 
@@ -179,11 +183,13 @@ class AdminVocabularyController extends BaseAPIController
             $importedItems[] = $vocabulary;
 
             // Log the creation for audit trail
-            activity()
-                ->performedOn($vocabulary)
-                ->causedBy($request->user())
-                ->withProperties(['data' => $item])
-                ->log('bulk_imported');
+            AuditLog::log(
+                'bulk_imported',
+                'vocabulary',
+                $vocabulary,
+                [],
+                ['data' => $item]
+            );
         }
 
         return $this->sendResponse($importedItems, count($importedItems) . ' vocabulary items imported successfully.');

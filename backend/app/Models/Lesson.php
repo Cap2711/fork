@@ -123,7 +123,7 @@ class Lesson extends Model
             'order' => $this->order,
             'sections_count' => $this->sections()->count(),
             'vocabulary_count' => $this->vocabularyItems()->count(),
-            'thumbnail' => $this->getMedia('thumbnail')->first()?->getUrl(),
+            'thumbnail' => collect($this->getMedia('thumbnail'))->first()?->getUrl(),
             'unit' => [
                 'id' => $this->unit->id,
                 'title' => $this->unit->title,

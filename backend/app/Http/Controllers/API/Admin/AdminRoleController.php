@@ -84,7 +84,7 @@ class AdminRoleController extends BaseAPIController
     public function update(Request $request, Role $role): JsonResponse
     {
         if ($role->is_system) {
-            return $this->sendError('System roles cannot be modified.', 403);
+            return $this->sendError('System roles cannot be modified.',['error' => 'System roles cannot be modified.'], 403);
         }
 
         $request->validate([
@@ -107,11 +107,11 @@ class AdminRoleController extends BaseAPIController
     public function destroy(Role $role): JsonResponse
     {
         if ($role->is_system) {
-            return $this->sendError('System roles cannot be deleted.', 403);
+            return $this->sendError('System roles cannot be deleted.', ['error' => 'System roles cannot be deleted.'], 403);
         }
 
         if ($role->users()->exists()) {
-            return $this->sendError('Cannot delete role with assigned users.', 409);
+            return $this->sendError('Cannot delete role with assigned users.', ['error' => 'Cannot delete role with assigned users.'], 409);
         }
 
         $role->delete();
@@ -124,7 +124,7 @@ class AdminRoleController extends BaseAPIController
     public function updatePermissions(Request $request, Role $role): JsonResponse
     {
         if ($role->is_system) {
-            return $this->sendError('System role permissions cannot be modified.', 403);
+            return $this->sendError('System role permissions cannot be modified.', ['error' => 'System role permissions cannot be modified.'], 403);
         }
 
         $request->validate([

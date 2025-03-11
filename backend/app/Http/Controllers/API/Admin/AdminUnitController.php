@@ -8,6 +8,7 @@ use App\Models\Unit;
 use App\Models\LearningPath;
 use App\Http\Requests\API\Unit\StoreUnitRequest;
 use App\Http\Requests\API\Unit\UpdateUnitRequest;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -81,11 +82,13 @@ class AdminUnitController extends BaseAPIController
         }
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($unit)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $request->validated()])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'units',
+            $unit,
+            [],
+            $request->validated()
+        );
 
         return $this->sendCreatedResponse($unit, 'Unit created successfully.');
     }
@@ -129,14 +132,12 @@ class AdminUnitController extends BaseAPIController
         $unit->update($request->validated());
 
         // Log the update for audit trail
-        activity()
-            ->performedOn($unit)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::logChange(
+            $unit,
+            'update',
+            $oldData,
+            $unit->toArray()
+        );
 
         return $this->sendResponse($unit, 'Unit updated successfully.');
     }
@@ -149,7 +150,7 @@ class AdminUnitController extends BaseAPIController
     {
         // Prevent deletion of published units
         if ($unit->status === 'published') {
-            return $this->sendError('Cannot delete a published unit. Archive it first.', 422);
+            return $this->sendError('Cannot delete a published unit. Archive it first.', ['status' => 422]);
         }
 
         $data = $unit->toArray();
@@ -160,11 +161,13 @@ class AdminUnitController extends BaseAPIController
         $unit->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($unit)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'units',
+            $unit,
+            $data,
+            []
+        );
 
         return $this->sendNoContentResponse();
     }
@@ -184,14 +187,13 @@ class AdminUnitController extends BaseAPIController
         $unit->save();
 
         // Log the status change for audit trail
-        activity()
-            ->performedOn($unit)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old_status' => $oldStatus,
-                'new_status' => $request->status
-            ])
-            ->log('status_updated');
+        AuditLog::log(
+            'status_update',
+            'units',
+            $unit,
+            ['status' => $oldStatus],
+            ['status' => $request->status]
+        );
 
         return $this->sendResponse($unit, 'Unit status updated successfully.');
     }
@@ -224,7 +226,7 @@ class AdminUnitController extends BaseAPIController
     {
         // Validate that the unit is in draft status
         if ($unit->status !== 'draft') {
-            return $this->sendError('Only draft units can be submitted for review.', 422);
+            return $this->sendError('Only draft units can be submitted for review.', ['error' => 'Only draft units can be submitted for review.'], 422);
         }
 
         // Update the unit status to 'in_review'
@@ -242,11 +244,13 @@ class AdminUnitController extends BaseAPIController
         // $this->notifyReviewers($unit, $review);
 
         // Log the review submission
-        activity()
-            ->performedOn($unit)
-            ->causedBy($request->user())
-            ->withProperties(['review_id' => $review->id])
-            ->log('submitted_for_review');
+        AuditLog::log(
+            'submit_for_review',
+            'units',
+            $unit,
+            [],
+            ['review_id' => $review->id]
+        );
 
         return $this->sendResponse($unit, 'Unit submitted for review successfully.');
     }
@@ -258,7 +262,7 @@ class AdminUnitController extends BaseAPIController
     {
         // Validate that the unit is in review status
         if ($unit->review_status !== 'pending') {
-            return $this->sendError('This unit is not pending review.', 422);
+            return $this->sendError('This unit is not pending review.', ['error' => 'This unit is not pending review.'], 422);
         }
 
         $request->validate([
@@ -269,7 +273,7 @@ class AdminUnitController extends BaseAPIController
         $review = $unit->reviews()->where('status', 'pending')->latest()->first();
         
         if (!$review) {
-            return $this->sendError('No pending review found for this unit.', 404);
+            return $this->sendError('No pending review found for this unit.', ['error' => 'No pending review found for this unit.'], 404);
         }
 
         // Update the review
@@ -288,11 +292,13 @@ class AdminUnitController extends BaseAPIController
         // $this->notifyContentCreator($unit, $review, 'approved');
 
         // Log the review approval
-        activity()
-            ->performedOn($unit)
-            ->causedBy($request->user())
-            ->withProperties(['review_id' => $review->id])
-            ->log('review_approved');
+        AuditLog::log(
+            'review_approved',
+            'units',
+            $unit,
+            [],
+            ['review_id' => $review->id]
+        );
 
         return $this->sendResponse($unit, 'Unit review approved successfully.');
     }
@@ -304,7 +310,7 @@ class AdminUnitController extends BaseAPIController
     {
         // Validate that the unit is in review status
         if ($unit->review_status !== 'pending') {
-            return $this->sendError('This unit is not pending review.', 422);
+            return $this->sendError('This unit is not pending review.', ['error' => 'This unit is not pending review.'], 422);
         }
 
         $request->validate([
@@ -316,7 +322,7 @@ class AdminUnitController extends BaseAPIController
         $review = $unit->reviews()->where('status', 'pending')->latest()->first();
         
         if (!$review) {
-            return $this->sendError('No pending review found for this unit.', 404);
+            return $this->sendError('No pending review found for this unit.', ['error' => 'No pending review found for this unit.'], 404);
         }
 
         // Update the review
@@ -336,14 +342,16 @@ class AdminUnitController extends BaseAPIController
         // $this->notifyContentCreator($unit, $review, 'rejected');
 
         // Log the review rejection
-        activity()
-            ->performedOn($unit)
-            ->causedBy($request->user())
-            ->withProperties([
+        AuditLog::log(
+            'review_rejected',
+            'units',
+            $unit,
+            [],
+            [
                 'review_id' => $review->id,
                 'rejection_reason' => $request->rejection_reason
-            ])
-            ->log('review_rejected');
+            ]
+        );
 
         return $this->sendResponse($unit, 'Unit review rejected successfully.');
     }

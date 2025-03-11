@@ -124,7 +124,7 @@ class Unit extends Model
             'lessons_count' => $this->lessons()->count(),
             'quizzes_count' => $this->quizzes()->count(),
             'has_guide' => $this->guideBookEntries()->exists(),
-            'thumbnail' => $this->getMedia('thumbnail')->first()?->getUrl(),
+            'thumbnail' => collect($this->getMedia('thumbnail'))->first()?->getUrl(),
             'learning_path' => [
                 'id' => $this->learningPath->id,
                 'title' => $this->learningPath->title

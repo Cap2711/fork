@@ -3,11 +3,13 @@
 namespace App\Models\Traits;
 
 use App\Models\MediaFile;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Image;
+use Intervention\Image\ImageManager;
 
 trait HasMedia
 {
@@ -63,7 +65,7 @@ trait HasMedia
     /**
      * Generate a unique filename.
      */
-    protected function generateFileName(UploadedFile $file): string
+    protected function generateFileName(UploadedFile $file): string 
     {
         $extension = $file->getClientOriginalExtension();
         return sprintf(
@@ -101,22 +103,45 @@ trait HasMedia
     /**
      * Extract metadata from file.
      */
-    protected function extractMetadata(UploadedFile $file): array
+    protected function extractMetadata(UploadedFile $file): array 
     {
         $metadata = [
             'original_name' => $file->getClientOriginalName(),
             'extension' => $file->getClientOriginalExtension(),
         ];
 
-        if (Str::startsWith($file->getMimeType(), 'image/')) {
-            $image = Image::make($file);
-            $metadata['dimensions'] = [
-                'width' => $image->width(),
-                'height' => $image->height(),
-            ];
+        if ($this->isImageFile($file)) {
+            try {
+                $manager = new ImageManager(['driver' => 'gd']);
+                $image = $manager->read($file);
+                $metadata['dimensions'] = [
+                    'width' => $image->width(),
+                    'height' => $image->height(),
+                ];
+            } catch (\Exception $e) {
+                Log::warning('Failed to extract image dimensions: ' . $e->getMessage());
+                $metadata['dimensions'] = [
+                    'width' => 0,
+                    'height' => 0,
+                ];
+            }
         }
 
         return $metadata;
+    }
+
+    /**
+     * Check if the file is an image.
+     */
+    protected function isImageFile(UploadedFile $file): bool
+    {
+        return in_array($file->getMimeType(), [
+            'image/jpeg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/svg+xml',
+        ]);
     }
 
     /**
@@ -143,38 +168,44 @@ trait HasMedia
                 $fileName
             );
 
-            $image = Image::make($file);
+            try {
+                $manager = new ImageManager(['driver' => 'gd']);
+                $image = $manager->read($file);
 
-            // Apply conversion operations
-            if (!empty($conversion['width']) || !empty($conversion['height'])) {
-                $image->resize(
-                    $conversion['width'] ?? null,
-                    $conversion['height'] ?? null,
-                    function ($constraint) use ($conversion) {
-                        if ($conversion['aspect'] ?? true) {
-                            $constraint->aspectRatio();
+                // Apply conversion operations
+                if (!empty($conversion['width']) || !empty($conversion['height'])) {
+                    $image->resize(
+                        $conversion['width'] ?? null,
+                        $conversion['height'] ?? null,
+                        function ($constraint) use ($conversion) {
+                            if ($conversion['aspect'] ?? true) {
+                                $constraint->aspectRatio();
+                            }
+                            if ($conversion['upsize'] ?? false) {
+                                $constraint->upsize();
+                            }
                         }
-                        if ($conversion['upsize'] ?? false) {
-                            $constraint->upsize();
-                        }
-                    }
-                );
-            }
-
-            // Apply additional operations
-            if (!empty($conversion['operations'])) {
-                foreach ($conversion['operations'] as $operation => $params) {
-                    $image->{$operation}(...$params);
+                    );
                 }
+
+                // Apply additional operations
+                if (!empty($conversion['operations'])) {
+                    foreach ($conversion['operations'] as $operation => $params) {
+                        $image->{$operation}(...$params);
+                    }
+                }
+
+                // Save conversion
+                Storage::disk($media->disk)->put(
+                    $path,
+                    $image->encode($media->getExtension(), $conversion['quality'] ?? 90)
+                );
+
+                $conversionsData[$name] = $path;
+            } catch (\Exception $e) {
+                Log::error('Failed to perform conversion ' . $name . ': ' . $e->getMessage());
+                continue;
             }
-
-            // Save conversion
-            Storage::disk($media->disk)->put(
-                $path,
-                $image->encode(null, $conversion['quality'] ?? 90)
-            );
-
-            $conversionsData[$name] = $path;
         }
 
         $media->update(['conversions' => $conversionsData]);
@@ -187,58 +218,63 @@ trait HasMedia
         MediaFile $media,
         UploadedFile $file
     ): void {
-        if (!$media->isImage()) {
+        if (!$this->isImageFile($file)) {
             return;
         }
 
         $responsiveImages = [];
         $sizes = [2048, 1024, 768, 480];
-        $image = Image::make($file);
-        $originalWidth = $image->width();
 
-        foreach ($sizes as $size) {
-            if ($size >= $originalWidth) {
-                continue;
+        try {
+            $manager = new ImageManager(['driver' => 'gd']);
+            $image = $manager->read($file);
+            $originalWidth = $image->width();
+
+            foreach ($sizes as $size) {
+                if ($size >= $originalWidth) {
+                    continue;
+                }
+
+                $fileName = sprintf(
+                    '%s-%dw.%s',
+                    pathinfo($media->file_name, PATHINFO_FILENAME),
+                    $size,
+                    $media->getExtension()
+                );
+            
+                $path = sprintf(
+                    '%s/responsive/%s',
+                    dirname($media->path),
+                    $fileName
+                );
+
+                $image->resize($size, null, function ($constraint) {
+                    $constraint->aspectRatio();
+                });
+
+                Storage::disk($media->disk)->put(
+                    $path,
+                    $image->encode($media->getExtension(), 80)
+                );
+
+                $responsiveImages[$size] = $path;
             }
 
-            $fileName = sprintf(
-                '%s-%dw.%s',
-                pathinfo($media->file_name, PATHINFO_FILENAME),
-                $size,
-                $media->getExtension()
-            );
-            
-            $path = sprintf(
-                '%s/responsive/%s',
-                dirname($media->path),
-                $fileName
-            );
-
-            $image->resize($size, null, function ($constraint) {
-                $constraint->aspectRatio();
-            });
-
-            Storage::disk($media->disk)->put(
-                $path,
-                $image->encode(null, 80)
-            );
-
-            $responsiveImages[$size] = $path;
+            $media->update(['responsive_images' => $responsiveImages]);
+        } catch (\Exception $e) {
+            Log::error('Failed to generate responsive images: ' . $e->getMessage());
         }
-
-        $media->update(['responsive_images' => $responsiveImages]);
     }
 
     /**
      * Get media from a specific collection.
      */
-    public function getMedia(string $collection = 'default'): array
+    public function getMedia(string $collection = 'default'): Collection
     {
         return $this->media()
             ->where('collection_name', $collection)
             ->orderBy('order')
-            ->get()
-            ->toArray();
+            ->get();
     }
 
     /**

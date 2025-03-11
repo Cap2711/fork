@@ -4,14 +4,14 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 class BaseAPIController extends Controller
 {
     /**
      * Send a success response.
      */
-    protected function sendResponse($data, string $message = '', int $code = Response::HTTP_OK): JsonResponse
+    protected function sendResponse($data, string $message = '', int $code = HttpResponse::HTTP_OK): JsonResponse
     {
         return response()->json([
             'success' => true,
@@ -23,7 +23,7 @@ class BaseAPIController extends Controller
     /**
      * Send an error response.
      */
-    protected function sendError(string $message, array $errors = [], int $code = Response::HTTP_BAD_REQUEST): JsonResponse
+    protected function sendError(string $message, array $errors = [], int $code = HttpResponse::HTTP_BAD_REQUEST): JsonResponse
     {
         return response()->json([
             'success' => false,
@@ -34,8 +34,9 @@ class BaseAPIController extends Controller
 
     /**
      * Send a pagination response.
+     * @param \Illuminate\Pagination\LengthAwarePaginator $data
      */
-    protected function sendPaginatedResponse($data, string $message = ''): JsonResponse
+    protected function sendPaginatedResponse($data, string $message = '', int $code = HttpResponse::HTTP_OK): JsonResponse
     {
         return response()->json([
             'success' => true,
@@ -49,7 +50,7 @@ class BaseAPIController extends Controller
                 'to' => $data->lastItem(),
             ],
             'message' => $message,
-        ]);
+        ], $code);
     }
 
     /**
@@ -57,7 +58,7 @@ class BaseAPIController extends Controller
      */
     protected function sendCreatedResponse($data, string $message = ''): JsonResponse
     {
-        return $this->sendResponse($data, $message, Response::HTTP_CREATED);
+        return $this->sendResponse($data, $message, HttpResponse::HTTP_CREATED);
     }
 
     /**
@@ -65,7 +66,7 @@ class BaseAPIController extends Controller
      */
     protected function sendNoContentResponse(): JsonResponse
     {
-        return response()->json(null, Response::HTTP_NO_CONTENT);
+        return response()->json(null, HttpResponse::HTTP_NO_CONTENT);
     }
 
     /**
@@ -73,7 +74,7 @@ class BaseAPIController extends Controller
      */
     protected function sendNotFoundResponse(string $message = 'Resource not found'): JsonResponse
     {
-        return $this->sendError($message, [], Response::HTTP_NOT_FOUND);
+        return $this->sendError($message, [], HttpResponse::HTTP_NOT_FOUND);
     }
 
     /**
@@ -81,7 +82,7 @@ class BaseAPIController extends Controller
      */
     protected function sendUnauthorizedResponse(string $message = 'Unauthorized'): JsonResponse
     {
-        return $this->sendError($message, [], Response::HTTP_UNAUTHORIZED);
+        return $this->sendError($message, [], HttpResponse::HTTP_UNAUTHORIZED);
     }
 
     /**
@@ -89,6 +90,6 @@ class BaseAPIController extends Controller
      */
     protected function sendForbiddenResponse(string $message = 'Forbidden'): JsonResponse
     {
-        return $this->sendError($message, [], Response::HTTP_FORBIDDEN);
+        return $this->sendError($message, [], HttpResponse::HTTP_FORBIDDEN);
     }
 }

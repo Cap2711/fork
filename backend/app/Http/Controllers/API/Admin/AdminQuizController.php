@@ -62,10 +62,10 @@ class AdminQuizController extends BaseAPIController
         // Attach to section if specified
         if ($request->has('section_id')) {
             $section = Section::findOrFail($request->section_id);
-            
+
             // Get the highest order in the section
             $maxOrder = $section->quizzes()->max('order') ?? 0;
-            
+
             // Attach with the next order
             $section->quizzes()->attach($quiz->id, ['order' => $maxOrder + 1]);
         }
@@ -136,10 +136,10 @@ class AdminQuizController extends BaseAPIController
         }
 
         $data = $quiz->toArray();
-        
+
         // Detach from all sections
         $quiz->sections()->detach();
-        
+
         $quiz->delete();
 
         // Log the deletion for audit trail
@@ -190,7 +190,7 @@ class AdminQuizController extends BaseAPIController
         ]);
 
         $questionIds = $request->question_ids;
-        
+
         // Update the order of each question
         foreach ($questionIds as $index => $questionId) {
             $quiz->questions()->updateExistingPivot($questionId, ['order' => $index + 1]);
@@ -228,4 +228,6 @@ class AdminQuizController extends BaseAPIController
 
         return $this->sendCreatedResponse($newQuiz, 'Quiz cloned successfully.');
     }
+
+    
 }

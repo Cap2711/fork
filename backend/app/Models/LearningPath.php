@@ -121,7 +121,7 @@ class LearningPath extends Model
             'status' => $this->status,
             'units_count' => $this->units()->count(),
             'lessons_count' => $this->getLessonCount(),
-            'thumbnail' => $this->getMedia('thumbnail')->first()?->getUrl(),
+            'thumbnail' => collect($this->getMedia('thumbnail'))->first()?->getUrl(),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at
         ];

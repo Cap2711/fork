@@ -111,7 +111,7 @@ class AdminAuditController extends BaseAPIController
 
         $modelClass = 'App\\Models\\' . ucfirst($type);
         if (!class_exists($modelClass)) {
-            return $this->sendError('Invalid content type.', 404);
+            return $this->sendError('Invalid content type.', ['error' => 'Invalid content type'], 404);
         }
 
         $query = AuditLog::where('auditable_type', $modelClass)

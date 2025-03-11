@@ -7,6 +7,7 @@ use App\Models\QuizQuestion;
 use App\Models\Quiz;
 use App\Http\Requests\API\QuizQuestion\StoreQuizQuestionRequest;
 use App\Http\Requests\API\QuizQuestion\UpdateQuizQuestionRequest;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -62,11 +63,13 @@ class AdminQuizQuestionController extends BaseAPIController
         $quizQuestion = QuizQuestion::create($data);
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($quizQuestion)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'quiz_questions',
+            $quizQuestion,
+            [],
+            $quizQuestion->toArray()
+        );
 
         return $this->sendCreatedResponse($quizQuestion, 'Quiz question created successfully.');
     }
@@ -98,14 +101,13 @@ class AdminQuizQuestionController extends BaseAPIController
         $quizQuestion->update($request->validated());
 
         // Log the update for audit trail
-        activity()
-            ->performedOn($quizQuestion)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::log(
+            'update',
+            'quiz_questions',
+            $quizQuestion,
+            $oldData,
+            $request->validated()
+        );
 
         return $this->sendResponse($quizQuestion, 'Quiz question updated successfully.');
     }
@@ -119,11 +121,12 @@ class AdminQuizQuestionController extends BaseAPIController
         $quizQuestion->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($quizQuestion)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'quiz_questions',
+            $quizQuestion,
+            $data
+        );
 
         return $this->sendNoContentResponse();
     }
@@ -147,14 +150,16 @@ class AdminQuizQuestionController extends BaseAPIController
         $newQuizQuestion->save();
 
         // Log the cloning for audit trail
-        activity()
-            ->performedOn($newQuizQuestion)
-            ->causedBy($request->user())
-            ->withProperties([
+        AuditLog::log(
+            'clone',
+            'quiz_questions',
+            $newQuizQuestion,
+            [],
+            [
                 'original_id' => $quizQuestion->id,
                 'data' => $newQuizQuestion->toArray()
-            ])
-            ->log('cloned');
+            ]
+        );
 
         return $this->sendCreatedResponse($newQuizQuestion, 'Quiz question cloned successfully.');
     }

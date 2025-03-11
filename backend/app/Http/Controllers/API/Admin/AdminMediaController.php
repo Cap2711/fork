@@ -32,7 +32,7 @@ class AdminMediaController extends BaseAPIController
             $model = $this->getModelFromType($request->mediable_type, $request->mediable_id);
 
             if (!$model) {
-                return $this->sendError('Invalid mediable type or ID.', 404);
+                return $this->sendError('Invalid mediable type or ID.', ['error' => 'Invalid mediable type or ID'], 404);
             }
 
             $mediaFile = $model->addMedia(
@@ -72,7 +72,7 @@ class AdminMediaController extends BaseAPIController
             $model = $this->getModelFromType($request->mediable_type, $request->mediable_id);
 
             if (!$model) {
-                return $this->sendError('Invalid mediable type or ID.', 404);
+                return $this->sendError('Invalid mediable type or ID.', ['error' => 'Invalid mediable type or ID'], 404);
             }
 
             $uploadedFiles = [];
@@ -127,7 +127,7 @@ class AdminMediaController extends BaseAPIController
     public function optimize(MediaFile $media): JsonResponse
     {
         if (!$media->isImage()) {
-            return $this->sendError('Only image files can be optimized.', 422);
+            return $this->sendError('Only image files can be optimized.', ['error' => 'Only image files can be optimized'], 422);
         }
 
         try {
@@ -158,7 +158,7 @@ class AdminMediaController extends BaseAPIController
     public function generateConversions(Request $request, MediaFile $media): JsonResponse
     {
         if (!$media->isImage()) {
-            return $this->sendError('Only image files can have conversions.', 422);
+            return $this->sendError('Only image files can have conversions.', ['error' => 'Only image files can have conversions'], 422);
         }
 
         $request->validate([
