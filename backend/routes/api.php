@@ -1,10 +1,6 @@
 <?php
 
-use App\Http\Controllers\Auth\AdminInviteController;
-use App\Http\Controllers\Auth\GoogleController;
-use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\ExerciseController;
-use App\Http\Controllers\LearningController;
+use App\Http\Controllers\API\LearningPathController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -13,43 +9,26 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-// Auth routes
-Route::post('/auth/login', [LoginController::class, 'login']);
-Route::post('/auth/register', [LoginController::class, 'register']);
-Route::post('/auth/logout', [LoginController::class, 'logout'])->middleware('auth:sanctum');
-Route::get('/auth/user', [LoginController::class, 'user'])->middleware('auth:sanctum');
+// Public routes
+Route::get('learning-paths', [LearningPathController::class, 'index']);
+Route::get('learning-paths/{learningPath}', [LearningPathController::class, 'show']);
+Route::get('learning-paths/level/{level}', [LearningPathController::class, 'byLevel']);
 
-// Google OAuth routes
-Route::get('/auth/google', [GoogleController::class, 'redirectToGoogle']);
-Route::get('/auth/google/callback', [GoogleController::class, 'handleGoogleCallback']);
+// Protected routes (require authentication)
+Route::middleware('auth:sanctum')->group(function () {
+    // Learning paths management
+    Route::middleware('can:manage-learning-paths')->group(function () {
+        Route::post('learning-paths', [LearningPathController::class, 'store']);
+        Route::put('learning-paths/{learningPath}', [LearningPathController::class, 'update']);
+        Route::delete('learning-paths/{learningPath}', [LearningPathController::class, 'destroy']);
+        Route::patch('learning-paths/{learningPath}/status', [LearningPathController::class, 'updateStatus']);
+    });
 
-// Admin routes
-Route::middleware(['auth:sanctum', 'admin'])->group(function () {
-    Route::post('/admin/invite', [AdminInviteController::class, 'sendInvite']);
-    Route::get('/admin/invites', [AdminInviteController::class, 'listInvites']);
-    Route::delete('/admin/invites/{invite}', [AdminInviteController::class, 'revokeInvite']);
+    // User progress
+    Route::get('learning-paths/{learningPath}/progress', [LearningPathController::class, 'progress']);
 });
 
-// Admin invite validation (public)
-Route::post('/admin/invite/validate', [AdminInviteController::class, 'validateInvite']);
-
-// Learning routes
-Route::middleware('auth:sanctum')->group(function () {
-    // Units and Lessons
-    Route::get('/units', [LearningController::class, 'getUnits']);
-    Route::get('/units/{unit}/lessons', [LearningController::class, 'getUnitLessons']);
-    Route::get('/lessons/{lesson}/content', [LearningController::class, 'getLessonContent']);
-    Route::post('/lessons/{lesson}/complete', [LearningController::class, 'completeLesson']);
-
-    // Exercise routes
-    Route::get('/exercises/{exercise}', [ExerciseController::class, 'getExercise']);
-    Route::post('/exercises/{exercise}/submit', [ExerciseController::class, 'submitAnswer']);
-    Route::get('/exercises/{exercise}/hint', [ExerciseController::class, 'getHint']);
-    Route::get('/exercises/practice', [ExerciseController::class, 'getPracticeExercises']);
-
-    // Practice
-    Route::post('/units/{unit}/practice', [LearningController::class, 'practiceUnit']);
-
-    // Progress
-    Route::get('/user/progress', [LearningController::class, 'getUserProgress']);
+// Health check
+Route::get('health', function () {
+    return response()->json(['status' => 'healthy']);
 });
