@@ -8,6 +8,7 @@ use App\Models\Section;
 use App\Models\Lesson;
 use App\Http\Requests\API\Section\StoreSectionRequest;
 use App\Http\Requests\API\Section\UpdateSectionRequest;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -68,11 +69,13 @@ class AdminSectionController extends BaseAPIController
         $section = Section::create($request->validated());
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($section)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $request->validated()])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'sections',
+            $section,
+            [],
+            $request->validated()
+        );
 
         return $this->sendCreatedResponse($section, 'Section created successfully.');
     }
@@ -116,14 +119,12 @@ class AdminSectionController extends BaseAPIController
         $section->update($request->validated());
 
         // Log the update for audit trail
-        activity()
-            ->performedOn($section)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::logChange(
+            $section,
+            'update',
+            $oldData,
+            $section->toArray()
+        );
 
         return $this->sendResponse($section, 'Section updated successfully.');
     }
@@ -136,18 +137,20 @@ class AdminSectionController extends BaseAPIController
     {
         // Prevent deletion of published sections
         if ($section->status === 'published') {
-            return $this->sendError('Cannot delete a published section. Archive it first.', 422);
+            return $this->sendError('Cannot delete a published section. Archive it first.', ['status' => 422]);
         }
 
         $data = $section->toArray();
         $section->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($section)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'sections',
+            $section,
+            $data,
+            []
+        );
 
         return $this->sendNoContentResponse();
     }
@@ -167,14 +170,13 @@ class AdminSectionController extends BaseAPIController
         $section->save();
 
         // Log the status change for audit trail
-        activity()
-            ->performedOn($section)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old_status' => $oldStatus,
-                'new_status' => $request->status
-            ])
-            ->log('status_updated');
+        AuditLog::log(
+            'status_update',
+            'sections',
+            $section,
+            ['status' => $oldStatus],
+            ['status' => $request->status]
+        );
 
         return $this->sendResponse($section, 'Section status updated successfully.');
     }
@@ -207,7 +209,7 @@ class AdminSectionController extends BaseAPIController
     {
         // Validate that the section is in draft status
         if ($section->status !== 'draft') {
-            return $this->sendError('Only draft sections can be submitted for review.', 422);
+            return $this->sendError('Only draft sections can be submitted for review.', ['status' => 422]);
         }
 
         // Update the section status to 'in_review'
@@ -225,11 +227,13 @@ class AdminSectionController extends BaseAPIController
         // $this->notifyReviewers($section, $review);
 
         // Log the review submission
-        activity()
-            ->performedOn($section)
-            ->causedBy($request->user())
-            ->withProperties(['review_id' => $review->id])
-            ->log('submitted_for_review');
+        AuditLog::log(
+            'submit_for_review',
+            'sections',
+            $section,
+            [],
+            ['review_id' => $review->id]
+        );
 
         return $this->sendResponse($section, 'Section submitted for review successfully.');
     }
@@ -241,7 +245,7 @@ class AdminSectionController extends BaseAPIController
     {
         // Validate that the section is in review status
         if ($section->review_status !== 'pending') {
-            return $this->sendError('This section is not pending review.', 422);
+            return $this->sendError('This section is not pending review.', ['status' => 422]);
         }
 
         $request->validate([
@@ -252,7 +256,7 @@ class AdminSectionController extends BaseAPIController
         $review = $section->reviews()->where('status', 'pending')->latest()->first();
         
         if (!$review) {
-            return $this->sendError('No pending review found for this section.', 404);
+            return $this->sendError('No pending review found for this section.', ['status' => 404]);
         }
 
         // Update the review
@@ -271,11 +275,13 @@ class AdminSectionController extends BaseAPIController
         // $this->notifyContentCreator($section, $review, 'approved');
 
         // Log the review approval
-        activity()
-            ->performedOn($section)
-            ->causedBy($request->user())
-            ->withProperties(['review_id' => $review->id])
-            ->log('review_approved');
+        AuditLog::log(
+            'approve_review',
+            'sections',
+            $section,
+            [],
+            ['review_id' => $review->id]
+        );
 
         return $this->sendResponse($section, 'Section review approved successfully.');
     }
@@ -287,7 +293,7 @@ class AdminSectionController extends BaseAPIController
     {
         // Validate that the section is in review status
         if ($section->review_status !== 'pending') {
-            return $this->sendError('This section is not pending review.', 422);
+            return $this->sendError('This section is not pending review.', ['status' => 422]);
         }
 
         $request->validate([
@@ -299,7 +305,7 @@ class AdminSectionController extends BaseAPIController
         $review = $section->reviews()->where('status', 'pending')->latest()->first();
         
         if (!$review) {
-            return $this->sendError('No pending review found for this section.', 404);
+            return $this->sendError('No pending review found for this section.', ['status' => 404]);
         }
 
         // Update the review
@@ -319,14 +325,16 @@ class AdminSectionController extends BaseAPIController
         // $this->notifyContentCreator($section, $review, 'rejected');
 
         // Log the review rejection
-        activity()
-            ->performedOn($section)
-            ->causedBy($request->user())
-            ->withProperties([
+        AuditLog::log(
+            'reject_review',
+            'sections',
+            $section,
+            [],
+            [
                 'review_id' => $review->id,
                 'rejection_reason' => $request->rejection_reason
-            ])
-            ->log('review_rejected');
+            ]
+        );
 
         return $this->sendResponse($section, 'Section review rejected successfully.');
     }

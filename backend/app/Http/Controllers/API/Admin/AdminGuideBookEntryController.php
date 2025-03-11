@@ -6,6 +6,7 @@ use App\Http\Controllers\API\BaseAPIController;
 use App\Models\GuideBookEntry;
 use App\Http\Requests\API\GuideBookEntry\StoreGuideBookEntryRequest;
 use App\Http\Requests\API\GuideBookEntry\UpdateGuideBookEntryRequest;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -57,17 +58,19 @@ class AdminGuideBookEntryController extends BaseAPIController
     {
         $guideBookEntry = GuideBookEntry::create($request->validated());
 
-        // Attach related entries if provided
+        // Handle related entries if provided
         if ($request->has('related_entry_ids')) {
-            $guideBookEntry->relatedEntries()->attach($request->related_entry_ids);
+            $guideBookEntry->relatedEntries()->sync($request->related_entry_ids);
         }
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($guideBookEntry)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $request->validated()])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'guide_book_entries',
+            $guideBookEntry,
+            [],
+            $request->validated()
+        );
 
         return $this->sendCreatedResponse($guideBookEntry, 'Guide book entry created successfully.');
     }
@@ -98,20 +101,18 @@ class AdminGuideBookEntryController extends BaseAPIController
         $oldData = $guideBookEntry->toArray();
         $guideBookEntry->update($request->validated());
 
-        // Update related entries if provided
+        // Handle related entries if provided
         if ($request->has('related_entry_ids')) {
             $guideBookEntry->relatedEntries()->sync($request->related_entry_ids);
         }
 
         // Log the update for audit trail
-        activity()
-            ->performedOn($guideBookEntry)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::logChange(
+            $guideBookEntry,
+            'update',
+            $oldData,
+            $guideBookEntry->toArray()
+        );
 
         return $this->sendResponse($guideBookEntry, 'Guide book entry updated successfully.');
     }
@@ -123,7 +124,7 @@ class AdminGuideBookEntryController extends BaseAPIController
     {
         // Prevent deletion of published guide book entries
         if ($guideBookEntry->status === 'published') {
-            return $this->sendError('Cannot delete a published guide book entry. Archive it first.', 422);
+            return $this->sendError('Cannot delete a published guide book entry. Archive it first.', ['status' => 422]);
         }
 
         $data = $guideBookEntry->toArray();
@@ -134,11 +135,13 @@ class AdminGuideBookEntryController extends BaseAPIController
         $guideBookEntry->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($guideBookEntry)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'guide_book_entries',
+            $guideBookEntry,
+            $data,
+            []
+        );
 
         return $this->sendNoContentResponse();
     }
@@ -157,14 +160,13 @@ class AdminGuideBookEntryController extends BaseAPIController
         $guideBookEntry->save();
 
         // Log the status change for audit trail
-        activity()
-            ->performedOn($guideBookEntry)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old_status' => $oldStatus,
-                'new_status' => $request->status
-            ])
-            ->log('status_updated');
+        AuditLog::log(
+            'status_update',
+            'guide_book_entries',
+            $guideBookEntry,
+            ['status' => $oldStatus],
+            ['status' => $request->status]
+        );
 
         return $this->sendResponse($guideBookEntry, 'Guide book entry status updated successfully.');
     }

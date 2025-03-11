@@ -7,7 +7,7 @@ use App\Models\User;
 use App\Models\LearningPath;
 use App\Models\Unit;
 use App\Models\Lesson;
-use App\Models\Progress;
+use App\Models\UserProgress;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,16 +35,16 @@ class AdminProgressController extends BaseAPIController
         $totalUsers = User::where('status', 'active')->count();
         
         // Get users who started at least one learning path
-        $activeUsers = DB::table('progress')
+        $activeUsers = DB::table('user_progress')
             ->select('user_id')
             ->distinct()
             ->count('user_id');
         
         // Get completion statistics for learning paths
-        $learningPathStats = DB::table('progress')
-            ->select('content_type', 'status', DB::raw('count(*) as count'))
-            ->where('content_type', 'App\\Models\\LearningPath')
-            ->groupBy('content_type', 'status')
+        $learningPathStats = DB::table('user_progress')
+            ->select('trackable_type', 'status', DB::raw('count(*) as count'))
+            ->where('trackable_type', 'App\\Models\\LearningPath')
+            ->groupBy('trackable_type', 'status')
             ->get()
             ->groupBy('status')
             ->map(function ($item) {
@@ -52,10 +52,10 @@ class AdminProgressController extends BaseAPIController
             });
         
         // Get completion statistics for units
-        $unitStats = DB::table('progress')
-            ->select('content_type', 'status', DB::raw('count(*) as count'))
-            ->where('content_type', 'App\\Models\\Unit')
-            ->groupBy('content_type', 'status')
+        $unitStats = DB::table('user_progress')
+            ->select('trackable_type', 'status', DB::raw('count(*) as count'))
+            ->where('trackable_type', 'App\\Models\\Unit')
+            ->groupBy('trackable_type', 'status')
             ->get()
             ->groupBy('status')
             ->map(function ($item) {
@@ -63,10 +63,10 @@ class AdminProgressController extends BaseAPIController
             });
         
         // Get completion statistics for lessons
-        $lessonStats = DB::table('progress')
-            ->select('content_type', 'status', DB::raw('count(*) as count'))
-            ->where('content_type', 'App\\Models\\Lesson')
-            ->groupBy('content_type', 'status')
+        $lessonStats = DB::table('user_progress')
+            ->select('trackable_type', 'status', DB::raw('count(*) as count'))
+            ->where('trackable_type', 'App\\Models\\Lesson')
+            ->groupBy('trackable_type', 'status')
             ->get()
             ->groupBy('status')
             ->map(function ($item) {
@@ -74,10 +74,10 @@ class AdminProgressController extends BaseAPIController
             });
         
         // Get recent activity
-        $recentActivity = DB::table('progress')
-            ->join('users', 'progress.user_id', '=', 'users.id')
-            ->select('progress.*', 'users.name as user_name', 'users.email as user_email')
-            ->orderBy('progress.updated_at', 'desc')
+        $recentActivity = DB::table('user_progress')
+            ->join('users', 'user_progress.user_id', '=', 'users.id')
+            ->select('user_progress.*', 'users.name as user_name', 'users.email as user_email')
+            ->orderBy('user_progress.updated_at', 'desc')
             ->limit(20)
             ->get();
         
@@ -99,38 +99,45 @@ class AdminProgressController extends BaseAPIController
      */
     public function userProgress(User $user): JsonResponse
     {
-        // Get all learning paths with progress
+        // Get learning paths, units, and lessons with progress
         $learningPaths = LearningPath::with(['progress' => function ($query) use ($user) {
             $query->where('user_id', $user->id);
         }])->get();
         
-        // Get all units with progress
         $units = Unit::with(['progress' => function ($query) use ($user) {
             $query->where('user_id', $user->id);
         }])->get();
         
-        // Get all lessons with progress
         $lessons = Lesson::with(['progress' => function ($query) use ($user) {
             $query->where('user_id', $user->id);
         }])->get();
         
         // Calculate overall completion percentage
         $totalContent = $learningPaths->count() + $units->count() + $lessons->count();
-        $completedContent = 
-            $learningPaths->filter(function ($path) {
-                return $path->progress->isNotEmpty() && $path->progress->first()->status === 'completed';
-            })->count() +
-            $units->filter(function ($unit) {
-                return $unit->progress->isNotEmpty() && $unit->progress->first()->status === 'completed';
-            })->count() +
-            $lessons->filter(function ($lesson) {
-                return $lesson->progress->isNotEmpty() && $lesson->progress->first()->status === 'completed';
-            })->count();
+        $completedContent = 0;
         
-        $completionPercentage = $totalContent > 0 ? round(($completedContent / $totalContent) * 100, 2) : 0;
+        foreach ($learningPaths as $path) {
+            if ($path->progress->isNotEmpty() && $path->progress->first()->status === UserProgress::STATUS_COMPLETED) {
+                $completedContent++;
+            }
+        }
+        
+        foreach ($units as $unit) {
+            if ($unit->progress->isNotEmpty() && $unit->progress->first()->status === UserProgress::STATUS_COMPLETED) {
+                $completedContent++;
+            }
+        }
+        
+        foreach ($lessons as $lesson) {
+            if ($lesson->progress->isNotEmpty() && $lesson->progress->first()->status === UserProgress::STATUS_COMPLETED) {
+                $completedContent++;
+            }
+        }
+        
+        $completionPercentage = $totalContent > 0 ? round(($completedContent / $totalContent) * 100) : 0;
         
         // Get recent activity for this user
-        $recentActivity = Progress::where('user_id', $user->id)
+        $recentActivity = UserProgress::where('user_id', $user->id)
             ->orderBy('updated_at', 'desc')
             ->limit(20)
             ->get();
@@ -142,7 +149,7 @@ class AdminProgressController extends BaseAPIController
                 return [
                     'id' => $path->id,
                     'title' => $path->title,
-                    'status' => $path->progress->isNotEmpty() ? $path->progress->first()->status : 'not_started',
+                    'status' => $path->progress->isNotEmpty() ? $path->progress->first()->status : UserProgress::STATUS_NOT_STARTED,
                     'last_activity' => $path->progress->isNotEmpty() ? $path->progress->first()->updated_at : null
                 ];
             }),
@@ -150,7 +157,7 @@ class AdminProgressController extends BaseAPIController
                 return [
                     'id' => $unit->id,
                     'title' => $unit->title,
-                    'status' => $unit->progress->isNotEmpty() ? $unit->progress->first()->status : 'not_started',
+                    'status' => $unit->progress->isNotEmpty() ? $unit->progress->first()->status : UserProgress::STATUS_NOT_STARTED,
                     'last_activity' => $unit->progress->isNotEmpty() ? $unit->progress->first()->updated_at : null
                 ];
             }),
@@ -158,7 +165,7 @@ class AdminProgressController extends BaseAPIController
                 return [
                     'id' => $lesson->id,
                     'title' => $lesson->title,
-                    'status' => $lesson->progress->isNotEmpty() ? $lesson->progress->first()->status : 'not_started',
+                    'status' => $lesson->progress->isNotEmpty() ? $lesson->progress->first()->status : UserProgress::STATUS_NOT_STARTED,
                     'last_activity' => $lesson->progress->isNotEmpty() ? $lesson->progress->first()->updated_at : null
                 ];
             }),
@@ -172,51 +179,60 @@ class AdminProgressController extends BaseAPIController
     public function contentProgress(string $type, int $id): JsonResponse
     {
         if (!array_key_exists($type, $this->contentTypeMap)) {
-            return $this->sendError('Invalid content type.', 400);
+            return $this->sendError('Invalid content type.', ['status' => 400]);
         }
         
         $modelClass = $this->contentTypeMap[$type];
         $content = $modelClass::findOrFail($id);
         
         // Get all progress records for this content
-        $progress = Progress::where('content_type', get_class($content))
-            ->where('content_id', $content->id)
+        $progress = UserProgress::where('trackable_type', get_class($content))
+            ->where('trackable_id', $content->id)
             ->with('user')
             ->get();
         
         // Calculate statistics
         $totalUsers = User::where('status', 'active')->count();
         $usersStarted = $progress->count();
-        $usersCompleted = $progress->where('status', 'completed')->count();
-        
-        $startRate = $totalUsers > 0 ? round(($usersStarted / $totalUsers) * 100, 2) : 0;
-        $completionRate = $usersStarted > 0 ? round(($usersCompleted / $usersStarted) * 100, 2) : 0;
+        $usersCompleted = $progress->where('status', UserProgress::STATUS_COMPLETED)->count();
         
         // Group progress by status
-        $progressByStatus = $progress->groupBy('status')
-            ->map(function ($items, $status) {
-                return [
-                    'status' => $status,
-                    'count' => $items->count()
-                ];
-            })->values();
+        $statusCounts = $progress->groupBy('status')->map->count();
+        
+        // Get average completion time (for completed items)
+        $completedProgress = $progress->where('status', UserProgress::STATUS_COMPLETED);
+        $averageTimeSpent = $completedProgress->isNotEmpty() 
+            ? $completedProgress->avg(function ($item) {
+                return $item->getTimeSpent();
+            }) 
+            : 0;
+        
+        // Get average score (if applicable)
+        $averageScore = $completedProgress->isNotEmpty() 
+            ? $completedProgress->avg(function ($item) {
+                return $item->getBestScore() ?? 0;
+            }) 
+            : 0;
+        
+        // Get recent activity
+        $recentActivity = $progress->sortByDesc('updated_at')->take(10);
         
         return $this->sendResponse([
             'content' => $content,
             'total_users' => $totalUsers,
             'users_started' => $usersStarted,
             'users_completed' => $usersCompleted,
-            'start_rate' => $startRate,
-            'completion_rate' => $completionRate,
-            'progress_by_status' => $progressByStatus,
-            'user_progress' => $progress->map(function ($item) {
+            'completion_rate' => $totalUsers > 0 ? round(($usersCompleted / $totalUsers) * 100) : 0,
+            'status_breakdown' => $statusCounts,
+            'average_time_spent' => round($averageTimeSpent),
+            'average_score' => round($averageScore, 1),
+            'recent_activity' => $recentActivity->map(function ($item) {
                 return [
-                    'user_id' => $item->user_id,
-                    'user_name' => $item->user->name,
-                    'user_email' => $item->user->email,
+                    'user' => $item->user,
                     'status' => $item->status,
-                    'score' => $item->score,
-                    'last_activity' => $item->updated_at
+                    'completed_at' => $item->completed_at,
+                    'updated_at' => $item->updated_at,
+                    'summary' => $item->getSummary()
                 ];
             })
         ]);

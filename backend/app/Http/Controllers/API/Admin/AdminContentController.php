@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\API\BaseAPIController;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,7 @@ class AdminContentController extends BaseAPIController
     public function publish(Request $request, string $type, int $id): JsonResponse
     {
         if (!array_key_exists($type, $this->contentTypeMap)) {
-            return $this->sendError('Invalid content type.', 400);
+            return $this->sendError('Invalid content type.', ['status' => 400]);
         }
 
         $modelClass = $this->contentTypeMap[$type];
@@ -39,7 +40,7 @@ class AdminContentController extends BaseAPIController
 
         // Check if the content is already published
         if ($content->status === 'published') {
-            return $this->sendError('Content is already published.', 400);
+            return $this->sendError('Content is already published.', ['status' => 400]);
         }
 
         // Create a version snapshot before publishing
@@ -51,10 +52,13 @@ class AdminContentController extends BaseAPIController
         $content->save();
 
         // Log the publishing action
-        activity()
-            ->performedOn($content)
-            ->causedBy($request->user())
-            ->log('published');
+        AuditLog::log(
+            'publish',
+            'content',
+            $content,
+            ['status' => 'draft'],
+            ['status' => 'published', 'published_at' => now()]
+        );
 
         return $this->sendResponse($content, 'Content published successfully.');
     }
@@ -65,7 +69,7 @@ class AdminContentController extends BaseAPIController
     public function unpublish(Request $request, string $type, int $id): JsonResponse
     {
         if (!array_key_exists($type, $this->contentTypeMap)) {
-            return $this->sendError('Invalid content type.', 400);
+            return $this->sendError('Invalid content type.', ['status' => 400]);
         }
 
         $modelClass = $this->contentTypeMap[$type];
@@ -73,7 +77,7 @@ class AdminContentController extends BaseAPIController
 
         // Check if the content is already unpublished
         if ($content->status !== 'published') {
-            return $this->sendError('Content is not currently published.', 400);
+            return $this->sendError('Content is not currently published.', ['status' => 400]);
         }
 
         // Create a version snapshot before unpublishing
@@ -84,10 +88,13 @@ class AdminContentController extends BaseAPIController
         $content->save();
 
         // Log the unpublishing action
-        activity()
-            ->performedOn($content)
-            ->causedBy($request->user())
-            ->log('unpublished');
+        AuditLog::log(
+            'unpublish',
+            'content',
+            $content,
+            ['status' => 'published'],
+            ['status' => 'draft']
+        );
 
         return $this->sendResponse($content, 'Content unpublished successfully.');
     }
@@ -98,7 +105,7 @@ class AdminContentController extends BaseAPIController
     public function versions(string $type, int $id): JsonResponse
     {
         if (!array_key_exists($type, $this->contentTypeMap)) {
-            return $this->sendError('Invalid content type.', 400);
+            return $this->sendError('Invalid content type.', ['status' => 400]);
         }
 
         $modelClass = $this->contentTypeMap[$type];
@@ -120,7 +127,7 @@ class AdminContentController extends BaseAPIController
     public function restore(Request $request, string $type, int $id, int $version): JsonResponse
     {
         if (!array_key_exists($type, $this->contentTypeMap)) {
-            return $this->sendError('Invalid content type.', 400);
+            return $this->sendError('Invalid content type.', ['status' => 400]);
         }
 
         $modelClass = $this->contentTypeMap[$type];
@@ -134,7 +141,7 @@ class AdminContentController extends BaseAPIController
             ->first();
 
         if (!$versionRecord) {
-            return $this->sendError('Version not found.', 404);
+            return $this->sendError('Version not found.', ['status' => 404]);
         }
 
         // Create a snapshot of the current state before restoring
@@ -146,14 +153,19 @@ class AdminContentController extends BaseAPIController
         $content->save();
 
         // Log the restore action
-        activity()
-            ->performedOn($content)
-            ->causedBy($request->user())
-            ->withProperties([
-                'version_id' => $version,
-                'version_label' => $versionRecord->label
-            ])
-            ->log('restored_version');
+        AuditLog::log(
+            'restore_version',
+            'content',
+            $content,
+            [],
+            [],
+            [
+                'metadata' => [
+                    'version_id' => $version,
+                    'version_label' => $versionRecord->label
+                ]
+            ]
+        );
 
         return $this->sendResponse($content, 'Content restored to version successfully.');
     }
@@ -210,14 +222,13 @@ class AdminContentController extends BaseAPIController
                 $content->save();
 
                 // Log the status change
-                activity()
-                    ->performedOn($content)
-                    ->causedBy($request->user())
-                    ->withProperties([
-                        'old_status' => $oldStatus,
-                        'new_status' => $status
-                    ])
-                    ->log('status_updated');
+                AuditLog::log(
+                    'status_update',
+                    'content',
+                    $content,
+                    ['status' => $oldStatus],
+                    ['status' => $status]
+                );
 
                 $results[] = [
                     'type' => $item['type'],
@@ -250,9 +261,9 @@ class AdminContentController extends BaseAPIController
             'status' => 'nullable|string|in:draft,published,archived',
         ]);
 
-        $query = $request->query;
-        $types = $request->types ?? array_keys($this->contentTypeMap);
-        $status = $request->status;
+        $query = $request->input('query');
+        $types = $request->input('types', array_keys($this->contentTypeMap));
+        $status = $request->input('status');
         
         $results = [];
 
@@ -271,21 +282,21 @@ class AdminContentController extends BaseAPIController
             
             // Apply search based on common fields
             // This assumes all content types have title/name fields
-            $searchQuery->where(function ($q) use ($query) {
+            $searchQuery->where(function ($q) use ($query, $modelClass) {
                 // Try common field names that might exist across models
-                if (Schema::hasColumn((new $modelClass)->getTable(), 'title')) {
+                if (property_exists($modelClass, 'title')) {
                     $q->orWhere('title', 'like', "%{$query}%");
                 }
                 
-                if (Schema::hasColumn((new $modelClass)->getTable(), 'name')) {
+                if (property_exists($modelClass, 'name')) {
                     $q->orWhere('name', 'like', "%{$query}%");
                 }
                 
-                if (Schema::hasColumn((new $modelClass)->getTable(), 'description')) {
+                if (property_exists($modelClass, 'description')) {
                     $q->orWhere('description', 'like', "%{$query}%");
                 }
                 
-                if (Schema::hasColumn((new $modelClass)->getTable(), 'content')) {
+                if (property_exists($modelClass, 'content')) {
                     $q->orWhere('content', 'like', "%{$query}%");
                 }
             });

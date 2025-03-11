@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AdminAnalyticsController extends BaseAPIController
 {
@@ -75,7 +76,7 @@ class AdminAnalyticsController extends BaseAPIController
         $modelClass  = 'App\\Models\\' . ucfirst(Str::singular($contentType));
 
         $performance = DB::table($contentType)
-            ->leftJoin('user_progress', function ($join) use ($contentType) {
+            ->leftJoin('user_progress', function ($join) use ($contentType, $modelClass) {
                 $join->on($contentType . '.id', '=', 'user_progress.trackable_id')
                     ->where('user_progress.trackable_type', '=', $modelClass);
             })
@@ -246,5 +247,229 @@ class AdminAnalyticsController extends BaseAPIController
             ->diffInWeeks(Carbon::parse($userProgress->max('created_at'))) ?: 1;
 
         return round($userProgress->where('status', 'completed')->count() / $dateRange, 2);
+    }
+
+    /**
+     * Analyze difficulty levels based on user performance
+     */
+    private function analyzeDifficulty(string $contentType, Carbon $startDate, Carbon $endDate): array
+    {
+        $modelClass = 'App\\Models\\' . ucfirst(Str::singular($contentType));
+        
+        $difficultyData = DB::table($contentType)
+            ->leftJoin('user_progress', function ($join) use ($contentType, $modelClass) {
+                $join->on($contentType . '.id', '=', 'user_progress.trackable_id')
+                    ->where('user_progress.trackable_type', '=', $modelClass);
+            })
+            ->whereBetween('user_progress.created_at', [$startDate, $endDate])
+            ->select(
+                $contentType . '.id',
+                $contentType . '.title',
+                DB::raw('AVG(user_progress.score) as avg_score'),
+                DB::raw('AVG(user_progress.time_spent) as avg_time'),
+                DB::raw('COUNT(user_progress.id) as attempt_count')
+            )
+            ->groupBy($contentType . '.id', $contentType . '.title')
+            ->orderBy('avg_score', 'asc')
+            ->limit(10)
+            ->get();
+            
+        return [
+            'most_challenging' => $difficultyData->take(5)->values(),
+            'difficulty_distribution' => [
+                'easy' => DB::table('user_progress')
+                    ->where('trackable_type', $modelClass)
+                    ->where('score', '>=', 80)
+                    ->whereBetween('created_at', [$startDate, $endDate])
+                    ->count(),
+                'medium' => DB::table('user_progress')
+                    ->where('trackable_type', $modelClass)
+                    ->whereBetween('score', [50, 79])
+                    ->whereBetween('created_at', [$startDate, $endDate])
+                    ->count(),
+                'hard' => DB::table('user_progress')
+                    ->where('trackable_type', $modelClass)
+                    ->where('score', '<', 50)
+                    ->whereBetween('created_at', [$startDate, $endDate])
+                    ->count(),
+            ]
+        ];
+    }
+    
+    /**
+     * Analyze progression paths through content
+     */
+    private function analyzeProgressionPaths(string $contentType): array
+    {
+        $modelClass = 'App\\Models\\' . ucfirst(Str::singular($contentType));
+        
+        // Get most common paths (sequences of content completion)
+        $commonPaths = DB::table('user_progress')
+            ->where('trackable_type', $modelClass)
+            ->select(
+                'user_id',
+                DB::raw('GROUP_CONCAT(trackable_id ORDER BY completed_at ASC) as path')
+            )
+            ->whereNotNull('completed_at')
+            ->groupBy('user_id')
+            ->get()
+            ->groupBy('path')
+            ->map(function ($group) {
+                return count($group);
+            })
+            ->sortDesc()
+            ->take(5);
+            
+        // Format the results
+        $formattedPaths = [];
+        foreach ($commonPaths as $path => $count) {
+            $contentIds = explode(',', $path);
+            $contentTitles = DB::table($contentType)
+                ->whereIn('id', $contentIds)
+                ->pluck('title', 'id')
+                ->toArray();
+                
+            $formattedPath = [];
+            foreach ($contentIds as $id) {
+                $formattedPath[] = [
+                    'id' => $id,
+                    'title' => $contentTitles[$id] ?? "Unknown Content ($id)"
+                ];
+            }
+            
+            $formattedPaths[] = [
+                'path' => $formattedPath,
+                'user_count' => $count
+            ];
+        }
+        
+        return $formattedPaths;
+    }
+    
+    /**
+     * Analyze skill progression over time
+     */
+    private function analyzeSkillProgression(): array
+    {
+        $progressData = DB::table('user_progress')
+            ->select(
+                'created_at',
+                'score',
+                'trackable_type',
+                'trackable_id'
+            )
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy(function ($item) {
+                return Carbon::parse($item->created_at)->format('Y-m-d');
+            });
+            
+        $skillProgression = [];
+        foreach ($progressData as $date => $entries) {
+            $skillProgression[] = [
+                'date' => $date,
+                'average_score' => $entries->avg('score'),
+                'items_completed' => $entries->count(),
+                'content_types' => $entries->groupBy('trackable_type')
+                    ->map(function ($group) {
+                        return $group->count();
+                    })
+            ];
+        }
+        
+        return $skillProgression;
+    }
+    
+    /**
+     * Analyze learning paths efficiency
+     */
+    private function analyzeLearningPathsEfficiency(): array
+    {
+        $learningPaths = LearningPath::with(['units', 'units.lessons'])
+            ->where('status', 'published')
+            ->get();
+            
+        $efficiencyData = [];
+        foreach ($learningPaths as $path) {
+            $totalUsers = DB::table('user_progress')
+                ->where('trackable_type', 'App\\Models\\LearningPath')
+                ->where('trackable_id', $path->id)
+                ->count('DISTINCT user_id');
+                
+            $completedUsers = DB::table('user_progress')
+                ->where('trackable_type', 'App\\Models\\LearningPath')
+                ->where('trackable_id', $path->id)
+                ->whereNotNull('completed_at')
+                ->count('DISTINCT user_id');
+                
+            $avgCompletionTime = DB::table('user_progress')
+                ->where('trackable_type', 'App\\Models\\LearningPath')
+                ->where('trackable_id', $path->id)
+                ->whereNotNull('completed_at')
+                ->avg('time_spent');
+                
+            $efficiencyData[] = [
+                'id' => $path->id,
+                'title' => $path->title,
+                'completion_rate' => $totalUsers > 0 ? round(($completedUsers / $totalUsers) * 100, 2) : 0,
+                'avg_completion_time' => $avgCompletionTime ? round($avgCompletionTime / 60, 2) : 0, // in minutes
+                'unit_count' => $path->units->count(),
+                'lesson_count' => $path->units->sum(function ($unit) {
+                    return $unit->lessons->count();
+                })
+            ];
+        }
+        
+        return $efficiencyData;
+    }
+    
+    /**
+     * Find peak usage hours
+     */
+    private function findPeakHours($patterns): array
+    {
+        $hourlyActivity = $patterns->groupBy('hour')
+            ->map(function ($group) {
+                return $group->sum('count');
+            })
+            ->toArray();
+            
+        // Fill in missing hours with zero
+        $completeHourlyData = [];
+        for ($i = 0; $i < 24; $i++) {
+            $completeHourlyData[$i] = $hourlyActivity[$i] ?? 0;
+        }
+        
+        return $completeHourlyData;
+    }
+    
+    /**
+     * Calculate weekday distribution of activity
+     */
+    private function calculateWeekdayDistribution($patterns): array
+    {
+        $weekdayActivity = $patterns->groupBy('day')
+            ->map(function ($group) {
+                return $group->sum('count');
+            })
+            ->toArray();
+            
+        // Convert to named days and fill in missing days with zero
+        $weekdayNames = [
+            1 => 'Sunday',
+            2 => 'Monday',
+            3 => 'Tuesday',
+            4 => 'Wednesday',
+            5 => 'Thursday',
+            6 => 'Friday',
+            7 => 'Saturday'
+        ];
+        
+        $formattedWeekdayData = [];
+        foreach ($weekdayNames as $dayNum => $dayName) {
+            $formattedWeekdayData[$dayName] = $weekdayActivity[$dayNum] ?? 0;
+        }
+        
+        return $formattedWeekdayData;
     }
 }

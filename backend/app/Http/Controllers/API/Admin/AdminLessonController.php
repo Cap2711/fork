@@ -8,6 +8,7 @@ use App\Models\Lesson;
 use App\Models\Unit;
 use App\Http\Requests\API\Lesson\StoreLessonRequest;
 use App\Http\Requests\API\Lesson\UpdateLessonRequest;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -81,11 +82,13 @@ class AdminLessonController extends BaseAPIController
         }
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($lesson)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $request->validated()])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'lessons',
+            $lesson,
+            [],
+            $request->validated()
+        );
 
         return $this->sendCreatedResponse($lesson, 'Lesson created successfully.');
     }
@@ -124,14 +127,12 @@ class AdminLessonController extends BaseAPIController
         $lesson->update($request->validated());
 
         // Log the update for audit trail
-        activity()
-            ->performedOn($lesson)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::logChange(
+            $lesson,
+            'update',
+            $oldData,
+            $lesson->toArray()
+        );
 
         return $this->sendResponse($lesson, 'Lesson updated successfully.');
     }
@@ -144,7 +145,7 @@ class AdminLessonController extends BaseAPIController
     {
         // Prevent deletion of published lessons
         if ($lesson->status === 'published') {
-            return $this->sendError('Cannot delete a published lesson. Archive it first.', 422);
+            return $this->sendError('Cannot delete a published lesson. Archive it first.', ['status' => 422]);
         }
 
         $data = $lesson->toArray();
@@ -155,11 +156,13 @@ class AdminLessonController extends BaseAPIController
         $lesson->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($lesson)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'lessons',
+            $lesson,
+            $data,
+            []
+        );
 
         return $this->sendNoContentResponse();
     }
@@ -179,14 +182,13 @@ class AdminLessonController extends BaseAPIController
         $lesson->save();
 
         // Log the status change for audit trail
-        activity()
-            ->performedOn($lesson)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old_status' => $oldStatus,
-                'new_status' => $request->status
-            ])
-            ->log('status_updated');
+        AuditLog::log(
+            'status_update',
+            'lessons',
+            $lesson,
+            ['status' => $oldStatus],
+            ['status' => $request->status]
+        );
 
         return $this->sendResponse($lesson, 'Lesson status updated successfully.');
     }

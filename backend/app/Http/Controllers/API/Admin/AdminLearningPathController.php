@@ -3,28 +3,15 @@
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\API\BaseAPIController;
-use App\Http\Controllers\API\LearningPathController as BaseLearningPathController;
 use App\Models\LearningPath;
 use App\Http\Requests\API\LearningPath\StoreLearningPathRequest;
 use App\Http\Requests\API\LearningPath\UpdateLearningPathRequest;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdminLearningPathController extends BaseAPIController
 {
-    /**
-     * The base learning path controller instance.
-     */
-    protected $baseLearningPathController;
-
-    /**
-     * Create a new controller instance.
-     */
-    public function __construct()
-    {
-        $this->baseLearningPathController = new BaseLearningPathController();
-    }
-
     /**
      * Display a listing of all learning paths for admin.
      * Admins can see all learning paths including drafts and archived.
@@ -63,11 +50,13 @@ class AdminLearningPathController extends BaseAPIController
         $learningPath = LearningPath::create($request->validated());
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($learningPath)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $request->validated()])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'learning_paths',
+            $learningPath,
+            [],
+            $request->validated()
+        );
 
         return $this->sendCreatedResponse($learningPath, 'Learning path created successfully.');
     }
@@ -107,14 +96,12 @@ class AdminLearningPathController extends BaseAPIController
         $learningPath->update($request->validated());
 
         // Log the update for audit trail
-        activity()
-            ->performedOn($learningPath)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::logChange(
+            $learningPath,
+            'update',
+            $oldData,
+            $learningPath->toArray()
+        );
 
         return $this->sendResponse($learningPath, 'Learning path updated successfully.');
     }
@@ -127,19 +114,24 @@ class AdminLearningPathController extends BaseAPIController
     {
         // Prevent deletion of published learning paths
         if ($learningPath->status === 'published') {
-            return $this->sendError('Cannot delete a published learning path. Archive it first.', 422);
+            return $this->sendError('Cannot delete a published learning path. Archive it first.', ['status' => 422]);
         }
 
         $data = $learningPath->toArray();
         
+        // Detach from all units
+        $learningPath->units()->detach();
+        
         $learningPath->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($learningPath)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'learning_paths',
+            $learningPath,
+            $data,
+            []
+        );
 
         return $this->sendNoContentResponse();
     }
@@ -159,14 +151,13 @@ class AdminLearningPathController extends BaseAPIController
         $learningPath->save();
 
         // Log the status change for audit trail
-        activity()
-            ->performedOn($learningPath)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old_status' => $oldStatus,
-                'new_status' => $request->status
-            ])
-            ->log('status_updated');
+        AuditLog::log(
+            'status_update',
+            'learning_paths',
+            $learningPath,
+            ['status' => $oldStatus],
+            ['status' => $request->status]
+        );
 
         return $this->sendResponse($learningPath, 'Learning path status updated successfully.');
     }
@@ -199,7 +190,7 @@ class AdminLearningPathController extends BaseAPIController
     {
         // Validate that the learning path is in draft status
         if ($learningPath->status !== 'draft') {
-            return $this->sendError('Only draft learning paths can be submitted for review.', 422);
+            return $this->sendError('Only draft learning paths can be submitted for review.', ['status' => 422]);
         }
 
         // Update the learning path status to 'in_review'
@@ -217,11 +208,16 @@ class AdminLearningPathController extends BaseAPIController
         // $this->notifyReviewers($learningPath, $review);
 
         // Log the review submission
-        activity()
-            ->performedOn($learningPath)
-            ->causedBy($request->user())
-            ->withProperties(['review_id' => $review->id])
-            ->log('submitted_for_review');
+        AuditLog::log(
+            'submit_for_review',
+            'learning_paths',
+            $learningPath,
+            [],
+            [],
+            [
+                'metadata' => ['review_id' => $review->id]
+            ]
+        );
 
         return $this->sendResponse($learningPath, 'Learning path submitted for review successfully.');
     }
@@ -233,7 +229,7 @@ class AdminLearningPathController extends BaseAPIController
     {
         // Validate that the learning path is in review status
         if ($learningPath->review_status !== 'pending') {
-            return $this->sendError('This learning path is not pending review.', 422);
+            return $this->sendError('This learning path is not pending review.', ['status' => 422]);
         }
 
         $request->validate([
@@ -244,7 +240,7 @@ class AdminLearningPathController extends BaseAPIController
         $review = $learningPath->reviews()->where('status', 'pending')->latest()->first();
         
         if (!$review) {
-            return $this->sendError('No pending review found for this learning path.', 404);
+            return $this->sendError('No pending review found for this learning path.', ['status' => 404]);
         }
 
         // Update the review
@@ -263,11 +259,16 @@ class AdminLearningPathController extends BaseAPIController
         // $this->notifyContentCreator($learningPath, $review, 'approved');
 
         // Log the review approval
-        activity()
-            ->performedOn($learningPath)
-            ->causedBy($request->user())
-            ->withProperties(['review_id' => $review->id])
-            ->log('review_approved');
+        AuditLog::log(
+            'review_approved',
+            'learning_paths',
+            $learningPath,
+            [],
+            [],
+            [
+                'metadata' => ['review_id' => $review->id]
+            ]
+        );
 
         return $this->sendResponse($learningPath, 'Learning path review approved successfully.');
     }
@@ -279,7 +280,7 @@ class AdminLearningPathController extends BaseAPIController
     {
         // Validate that the learning path is in review status
         if ($learningPath->review_status !== 'pending') {
-            return $this->sendError('This learning path is not pending review.', 422);
+            return $this->sendError('This learning path is not pending review.', ['status' => 422]);
         }
 
         $request->validate([
@@ -291,7 +292,7 @@ class AdminLearningPathController extends BaseAPIController
         $review = $learningPath->reviews()->where('status', 'pending')->latest()->first();
         
         if (!$review) {
-            return $this->sendError('No pending review found for this learning path.', 404);
+            return $this->sendError('No pending review found for this learning path.', ['status' => 404]);
         }
 
         // Update the review
@@ -311,14 +312,19 @@ class AdminLearningPathController extends BaseAPIController
         // $this->notifyContentCreator($learningPath, $review, 'rejected');
 
         // Log the review rejection
-        activity()
-            ->performedOn($learningPath)
-            ->causedBy($request->user())
-            ->withProperties([
-                'review_id' => $review->id,
-                'rejection_reason' => $request->rejection_reason
-            ])
-            ->log('review_rejected');
+        AuditLog::log(
+            'review_rejected',
+            'learning_paths',
+            $learningPath,
+            [],
+            [],
+            [
+                'metadata' => [
+                    'review_id' => $review->id,
+                    'rejection_reason' => $request->rejection_reason
+                ]
+            ]
+        );
 
         return $this->sendResponse($learningPath, 'Learning path review rejected successfully.');
     }

@@ -7,6 +7,7 @@ use App\Models\Quiz;
 use App\Models\Section;
 use App\Http\Requests\API\Quiz\StoreQuizRequest;
 use App\Http\Requests\API\Quiz\UpdateQuizRequest;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -70,11 +71,13 @@ class AdminQuizController extends BaseAPIController
         }
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($quiz)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $request->validated()])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'quizzes',
+            $quiz,
+            [],
+            $request->validated()
+        );
 
         return $this->sendCreatedResponse($quiz, 'Quiz created successfully.');
     }
@@ -112,14 +115,12 @@ class AdminQuizController extends BaseAPIController
         $quiz->update($request->validated());
 
         // Log the update for audit trail
-        activity()
-            ->performedOn($quiz)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::logChange(
+            $quiz,
+            'update',
+            $oldData,
+            $quiz->toArray()
+        );
 
         return $this->sendResponse($quiz, 'Quiz updated successfully.');
     }
@@ -131,7 +132,7 @@ class AdminQuizController extends BaseAPIController
     {
         // Prevent deletion of published quizzes
         if ($quiz->status === 'published') {
-            return $this->sendError('Cannot delete a published quiz. Archive it first.', 422);
+            return $this->sendError('Cannot delete a published quiz. Archive it first.', ['status' => 422]);
         }
 
         $data = $quiz->toArray();
@@ -142,11 +143,13 @@ class AdminQuizController extends BaseAPIController
         $quiz->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($quiz)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'quizzes',
+            $quiz,
+            $data,
+            []
+        );
 
         return $this->sendNoContentResponse();
     }
@@ -165,14 +168,13 @@ class AdminQuizController extends BaseAPIController
         $quiz->save();
 
         // Log the status change for audit trail
-        activity()
-            ->performedOn($quiz)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old_status' => $oldStatus,
-                'new_status' => $request->status
-            ])
-            ->log('status_updated');
+        AuditLog::log(
+            'status_update',
+            'quizzes',
+            $quiz,
+            ['status' => $oldStatus],
+            ['status' => $request->status]
+        );
 
         return $this->sendResponse($quiz, 'Quiz status updated successfully.');
     }
@@ -216,14 +218,13 @@ class AdminQuizController extends BaseAPIController
         }
 
         // Log the cloning for audit trail
-        activity()
-            ->performedOn($newQuiz)
-            ->causedBy($request->user())
-            ->withProperties([
-                'original_id' => $quiz->id,
-                'data' => $newQuiz->toArray()
-            ])
-            ->log('cloned');
+        AuditLog::log(
+            'clone',
+            'quizzes',
+            $newQuiz,
+            ['original_id' => $quiz->id],
+            $newQuiz->toArray()
+        );
 
         return $this->sendCreatedResponse($newQuiz, 'Quiz cloned successfully.');
     }

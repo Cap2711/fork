@@ -7,8 +7,10 @@ use App\Models\Exercise;
 use App\Models\Section;
 use App\Http\Requests\API\Exercise\StoreExerciseRequest;
 use App\Http\Requests\API\Exercise\UpdateExerciseRequest;
+use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminExerciseController extends BaseAPIController
 {
@@ -68,11 +70,13 @@ class AdminExerciseController extends BaseAPIController
         }
 
         // Log the creation for audit trail
-        activity()
-            ->performedOn($exercise)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $request->validated()])
-            ->log('created');
+        AuditLog::log(
+            'create',
+            'exercises',
+            $exercise,
+            [],
+            $request->validated()
+        );
 
         return $this->sendCreatedResponse($exercise, 'Exercise created successfully.');
     }
@@ -100,18 +104,34 @@ class AdminExerciseController extends BaseAPIController
      */
     public function update(UpdateExerciseRequest $request, Exercise $exercise): JsonResponse
     {
+        // Store old data for audit trail
         $oldData = $exercise->toArray();
+
+        // Update the exercise
         $exercise->update($request->validated());
 
+        // Handle section attachment/detachment if specified
+        if ($request->has('section_id')) {
+            // Detach from all current sections
+            $exercise->sections()->detach();
+            
+            // Attach to new section
+            $section = Section::findOrFail($request->section_id);
+            
+            // Get the highest order in the section
+            $maxOrder = $section->exercises()->max('order') ?? 0;
+            
+            // Attach with the next order
+            $section->exercises()->attach($exercise->id, ['order' => $maxOrder + 1]);
+        }
+
         // Log the update for audit trail
-        activity()
-            ->performedOn($exercise)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old' => $oldData,
-                'new' => $request->validated()
-            ])
-            ->log('updated');
+        AuditLog::logChange(
+            $exercise,
+            'update',
+            $oldData,
+            $exercise->toArray()
+        );
 
         return $this->sendResponse($exercise, 'Exercise updated successfully.');
     }
@@ -121,26 +141,22 @@ class AdminExerciseController extends BaseAPIController
      */
     public function destroy(Request $request, Exercise $exercise): JsonResponse
     {
-        // Prevent deletion of published exercises
-        if ($exercise->status === 'published') {
-            return $this->sendError('Cannot delete a published exercise. Archive it first.', 422);
-        }
-
+        // Store data for audit trail
         $data = $exercise->toArray();
-        
-        // Detach from all sections
-        $exercise->sections()->detach();
-        
+
+        // Delete the exercise
         $exercise->delete();
 
         // Log the deletion for audit trail
-        activity()
-            ->performedOn($exercise)
-            ->causedBy($request->user())
-            ->withProperties(['data' => $data])
-            ->log('deleted');
+        AuditLog::log(
+            'delete',
+            'exercises',
+            $exercise,
+            $data,
+            []
+        );
 
-        return $this->sendNoContentResponse();
+        return $this->sendResponse(null, 'Exercise deleted successfully.');
     }
 
     /**
@@ -149,7 +165,7 @@ class AdminExerciseController extends BaseAPIController
     public function updateStatus(Request $request, Exercise $exercise): JsonResponse
     {
         $request->validate([
-            'status' => ['required', 'string', 'in:draft,published,archived']
+            'status' => 'required|string|in:draft,published,archived'
         ]);
 
         $oldStatus = $exercise->status;
@@ -157,39 +173,82 @@ class AdminExerciseController extends BaseAPIController
         $exercise->save();
 
         // Log the status change for audit trail
-        activity()
-            ->performedOn($exercise)
-            ->causedBy($request->user())
-            ->withProperties([
-                'old_status' => $oldStatus,
-                'new_status' => $request->status
-            ])
-            ->log('status_updated');
+        AuditLog::log(
+            'status_update',
+            'exercises',
+            $exercise,
+            ['status' => $oldStatus],
+            ['status' => $request->status]
+        );
 
         return $this->sendResponse($exercise, 'Exercise status updated successfully.');
     }
 
     /**
-     * Clone an exercise.
+     * Clone an existing exercise.
      */
     public function clone(Request $request, Exercise $exercise): JsonResponse
     {
-        // Create a new exercise with the same data
         $newExercise = $exercise->replicate();
-        $newExercise->title = $exercise->title . ' (Copy)';
+        $newExercise->title = $newExercise->title . ' (Copy)';
         $newExercise->status = 'draft';
         $newExercise->save();
 
         // Log the cloning for audit trail
-        activity()
-            ->performedOn($newExercise)
-            ->causedBy($request->user())
-            ->withProperties([
-                'original_id' => $exercise->id,
-                'data' => $newExercise->toArray()
-            ])
-            ->log('cloned');
+        AuditLog::log(
+            'clone',
+            'exercises',
+            $newExercise,
+            [],
+            ['original_id' => $exercise->id]
+        );
 
         return $this->sendCreatedResponse($newExercise, 'Exercise cloned successfully.');
+    }
+
+    /**
+     * Reorder exercises within a section.
+     */
+    public function reorder(Request $request, Section $section): JsonResponse
+    {
+        $request->validate([
+            'exercises' => 'required|array',
+            'exercises.*.id' => 'required|exists:exercises,id',
+            'exercises.*.order' => 'required|integer|min:0'
+        ]);
+
+        // Begin a transaction
+        DB::beginTransaction();
+
+        try {
+            foreach ($request->exercises as $item) {
+                // Update the pivot table with the new order
+                $section->exercises()->updateExistingPivot($item['id'], ['order' => $item['order']]);
+            }
+
+            // Commit the transaction
+            DB::commit();
+
+            // Log the reordering
+            AuditLog::log(
+                'reorder',
+                'exercises',
+                $section,
+                [],
+                [],
+                [
+                    'metadata' => [
+                        'section_id' => $section->id,
+                        'exercises' => $request->exercises
+                    ]
+                ]
+            );
+
+            return $this->sendResponse(null, 'Exercises reordered successfully.');
+        } catch (\Exception $e) {
+            // Rollback the transaction in case of error
+            DB::rollBack();
+            return $this->sendError('Failed to reorder exercises: ' . $e->getMessage(), ['status' => 500]);
+        }
     }
 }
