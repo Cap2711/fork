@@ -43,11 +43,11 @@ export default function UnitModal({ unit, lessons, onClose, isOpen }: UnitModalP
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl w-full max-w-2xl mx-4 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-2xl mx-4 overflow-hidden bg-white rounded-xl">
         {/* Header */}
         <div 
-          className="p-6 flex items-center justify-between"
+          className="flex items-center justify-between p-6"
           style={{ backgroundColor: getDifficultyColor(unit.difficulty) }}
         >
           <div className="text-white">
@@ -72,19 +72,21 @@ export default function UnitModal({ unit, lessons, onClose, isOpen }: UnitModalP
                 className={`w-full p-4 bg-white border rounded-lg transition-all flex items-center justify-between gap-4 ${
                   isLessonLocked(lesson) 
                     ? 'opacity-50 cursor-not-allowed' 
-                    : 'hover:shadow-md cursor-pointer'
+                    : 'hover:border-[var(--duo-green)] hover:shadow-md'
                 }`}
                 disabled={isLessonLocked(lesson)}
               >
                 <div className="flex items-center gap-4">
                   <div 
                     className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      lesson.completed ? 'bg-[var(--duo-green)]' : 'bg-gray-200'
+                      lesson.completed 
+                        ? 'bg-[var(--duo-green)] text-white'
+                        : isLessonLocked(lesson)
+                        ? 'bg-gray-200 text-gray-400'
+                        : 'bg-[var(--duo-teal)] text-white'
                     }`}
                   >
-                    <span className={`material-icons-outlined ${
-                      lesson.completed ? 'text-white' : 'text-gray-400'
-                    }`}>
+                    <span className="material-icons-outlined">
                       {lesson.completed ? 'check' : isLessonLocked(lesson) ? 'lock' : 'play_arrow'}
                     </span>
                   </div>
@@ -94,7 +96,7 @@ export default function UnitModal({ unit, lessons, onClose, isOpen }: UnitModalP
                   </div>
                 </div>
                 <div className="flex items-center gap-1 text-[var(--duo-green)]">
-                  <span className="material-icons-outlined text-sm">diamond</span>
+                  <span className="text-sm material-icons-outlined">diamond</span>
                   <span className="text-sm font-bold">{lesson.xp} XP</span>
                 </div>
               </button>
@@ -103,9 +105,9 @@ export default function UnitModal({ unit, lessons, onClose, isOpen }: UnitModalP
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-gray-50 flex justify-between items-center">
+        <div className="flex items-center justify-between p-6 bg-gray-50">
           <div className="flex items-center gap-2">
-            <span className="material-icons-outlined text-yellow-400">stars</span>
+            <span className="text-yellow-400 material-icons-outlined">stars</span>
             <span className="font-bold">Level {unit.level}</span>
           </div>
           <button 

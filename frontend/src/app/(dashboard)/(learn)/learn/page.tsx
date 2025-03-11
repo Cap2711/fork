@@ -98,7 +98,7 @@ function UnitCircle({ unit, onClick }: { unit: Unit; onClick: () => void }) {
               fill="transparent"
               stroke={color}
               strokeWidth="8"
-              strokeDasharray={`${2 * Math.PI * 44 * progress / 100} ${2 * Math.PI * 44}`}
+              strokeDasharray={`${progress * 2.77} 277`}
               className="transition-all duration-500"
             />
           )}
@@ -106,24 +106,24 @@ function UnitCircle({ unit, onClick }: { unit: Unit; onClick: () => void }) {
 
         {/* Unit Circle */}
         <div 
-          className="absolute inset-2 rounded-full flex items-center justify-center cursor-pointer transform hover:scale-105 transition-transform shadow-lg"
+          className="absolute flex items-center justify-center transition-transform transform rounded-full shadow-lg cursor-pointer inset-2 hover:scale-105"
           style={{ background: color, opacity: unit.locked ? 0.5 : 1 }}
           onClick={onClick}
         >
-          <span className="text-white text-xl font-bold">{unit.id}</span>
+          <span className="text-xl font-bold text-white">{unit.id}</span>
         </div>
 
         {/* Crown for completed units */}
         {unit.level > 0 && (
-          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-yellow-400 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg">
-            <span className="material-icons-outlined text-sm">stars</span>
+          <div className="absolute flex items-center justify-center w-8 h-8 text-white transform -translate-x-1/2 bg-yellow-400 rounded-full shadow-lg -top-2 left-1/2">
+            <span className="text-sm material-icons-outlined">stars</span>
           </div>
         )}
       </div>
 
       {/* Unit Info */}
       <div className="mt-4 text-center">
-        <h3 className="font-bold text-lg">{unit.name}</h3>
+        <h3 className="text-lg font-bold">{unit.name}</h3>
         <p className="text-sm text-gray-600">{unit.description}</p>
         {!unit.locked && (
           <div className="mt-2 text-sm">
@@ -131,8 +131,8 @@ function UnitCircle({ unit, onClick }: { unit: Unit; onClick: () => void }) {
           </div>
         )}
         {unit.locked && (
-          <div className="mt-2 flex items-center justify-center gap-1 text-sm text-gray-500">
-            <span className="material-icons-outlined text-sm">lock</span>
+          <div className="flex items-center justify-center gap-1 mt-2 text-sm text-gray-500">
+            <span className="text-sm material-icons-outlined">lock</span>
             <span>Locked</span>
           </div>
         )}
@@ -201,7 +201,7 @@ export default function Learn() {
     try {
       const headers = { 'Content-Type': 'application/json' };
       const [progressRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/user/progress`, { headers }),
+        fetch(`/api/user/progress`, { headers }),
       ]);
 
       if (!progressRes.ok) throw new Error('Failed to fetch data');
@@ -230,9 +230,9 @@ export default function Learn() {
 
   return (
     <>
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="max-w-5xl px-4 py-6 mx-auto">
         {/* Top Stats Bar */}
-        <div className="flex items-center justify-between mb-8 bg-white p-4 rounded-xl shadow-sm">
+        <div className="flex items-center justify-between p-4 mb-8 bg-white shadow-sm rounded-xl">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <span className="material-icons-outlined text-[var(--duo-yellow)]">local_fire_department</span>
@@ -254,18 +254,18 @@ export default function Learn() {
         {/* Learning Path */}
         <div className="relative">
           {/* Completed Path Line */}
-          <div className="absolute top-1/2 left-0 right-0 h-2 bg-gray-200 -z-10">
+          <div className="absolute left-0 right-0 h-2 bg-gray-200 top-1/2 -z-10">
             <div 
               className="h-full bg-[var(--duo-green)]"
               style={{ 
-                width: `${(progress.current_unit / UNITS.length) * 100}%`,
+                width: `${(progress.completed_exercises / progress.total_exercises) * 100}%`,
                 transition: 'width 0.5s ease-in-out'
               }}
             />
           </div>
 
           {/* Units */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {UNITS.map((unit) => (
               <UnitCircle
                 key={unit.id}
