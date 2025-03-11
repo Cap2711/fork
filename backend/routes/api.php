@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\API\LearningPathController;
 use App\Http\Controllers\API\UnitController;
+use App\Http\Controllers\API\LessonController;
+use App\Http\Controllers\API\SectionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,6 +21,14 @@ Route::get('learning-paths/level/{level}', [LearningPathController::class, 'byLe
 Route::get('learning-paths/{learningPath}/units', [UnitController::class, 'index']);
 Route::get('units/{unit}', [UnitController::class, 'show']);
 
+// Lessons public routes
+Route::get('units/{unit}/lessons', [LessonController::class, 'index']);
+Route::get('lessons/{lesson}', [LessonController::class, 'show']);
+
+// Sections public routes
+Route::get('lessons/{lesson}/sections', [SectionController::class, 'index']);
+Route::get('sections/{section}', [SectionController::class, 'show']);
+
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
     // Learning paths management
@@ -33,11 +43,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('units/{unit}', [UnitController::class, 'update']);
         Route::delete('units/{unit}', [UnitController::class, 'destroy']);
         Route::post('learning-paths/{learningPath}/units/reorder', [UnitController::class, 'reorder']);
+
+        // Lessons management
+        Route::post('lessons', [LessonController::class, 'store']);
+        Route::put('lessons/{lesson}', [LessonController::class, 'update']);
+        Route::delete('lessons/{lesson}', [LessonController::class, 'destroy']);
+        Route::post('units/{unit}/lessons/reorder', [LessonController::class, 'reorder']);
+
+        // Sections management
+        Route::post('sections', [SectionController::class, 'store']);
+        Route::put('sections/{section}', [SectionController::class, 'update']);
+        Route::delete('sections/{section}', [SectionController::class, 'destroy']);
+        Route::post('lessons/{lesson}/sections/reorder', [SectionController::class, 'reorder']);
     });
 
     // User progress
     Route::get('learning-paths/{learningPath}/progress', [LearningPathController::class, 'progress']);
     Route::get('units/{unit}/progress', [UnitController::class, 'progress']);
+    Route::get('lessons/{lesson}/progress', [LessonController::class, 'progress']);
+    Route::get('sections/{section}/progress', [SectionController::class, 'progress']);
 });
 
 // Health check

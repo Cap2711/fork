@@ -1,66 +1,182 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Language Learning App API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A comprehensive API for a language learning platform built with Laravel.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Learning paths with sequential progression
+- Units, lessons, and sections organization
+- Various exercise types (multiple choice, fill in blanks, matching, etc.)
+- Progress tracking system
+- Vocabulary management
+- Quiz system with scoring
+- Guide book entries for additional resources
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## API Endpoints
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Public Routes
 
-## Learning Laravel
+#### Learning Paths
+- `GET /api/learning-paths` - List all learning paths
+- `GET /api/learning-paths/{id}` - Get a specific learning path
+- `GET /api/learning-paths/level/{level}` - Get learning paths by level
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+#### Units
+- `GET /api/learning-paths/{pathId}/units` - List units in a learning path
+- `GET /api/units/{id}` - Get a specific unit
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+#### Lessons
+- `GET /api/units/{unitId}/lessons` - List lessons in a unit
+- `GET /api/lessons/{id}` - Get a specific lesson
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+#### Sections
+- `GET /api/lessons/{lessonId}/sections` - List sections in a lesson
+- `GET /api/sections/{id}` - Get a specific section
 
-## Laravel Sponsors
+### Protected Routes (Requires Authentication)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+#### Learning Path Management
+- `POST /api/learning-paths` - Create a new learning path
+- `PUT /api/learning-paths/{id}` - Update a learning path
+- `DELETE /api/learning-paths/{id}` - Delete a learning path
+- `PATCH /api/learning-paths/{id}/status` - Update learning path status
 
-### Premium Partners
+#### Unit Management
+- `POST /api/units` - Create a new unit
+- `PUT /api/units/{id}` - Update a unit
+- `DELETE /api/units/{id}` - Delete a unit
+- `POST /api/learning-paths/{pathId}/units/reorder` - Reorder units
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+#### Lesson Management
+- `POST /api/lessons` - Create a new lesson
+- `PUT /api/lessons/{id}` - Update a lesson
+- `DELETE /api/lessons/{id}` - Delete a lesson
+- `POST /api/units/{unitId}/lessons/reorder` - Reorder lessons
 
-## Contributing
+#### Section Management
+- `POST /api/sections` - Create a new section
+- `PUT /api/sections/{id}` - Update a section
+- `DELETE /api/sections/{id}` - Delete a section
+- `POST /api/lessons/{lessonId}/sections/reorder` - Reorder sections
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+#### Progress Tracking
+- `GET /api/learning-paths/{id}/progress` - Get learning path progress
+- `GET /api/units/{id}/progress` - Get unit progress
+- `GET /api/lessons/{id}/progress` - Get lesson progress
+- `GET /api/sections/{id}/progress` - Get section progress
 
-## Code of Conduct
+## Data Models
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### LearningPath
+- id
+- title
+- description
+- target_level
+- status (draft, published, archived)
 
-## Security Vulnerabilities
+### Unit
+- id
+- learning_path_id
+- title
+- description
+- order
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### Lesson
+- id
+- unit_id
+- title
+- description
+- order
 
-## License
+### Section
+- id
+- lesson_id
+- title
+- content
+- order
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Exercise
+- id
+- section_id
+- type (multiple_choice, fill_blank, matching, writing, speaking)
+- content (JSON)
+- answers (JSON)
+- order
+
+### VocabularyItem
+- id
+- lesson_id
+- word
+- translation
+- example
+
+### Quiz
+- id
+- unit_id
+- title
+- passing_score
+
+### QuizQuestion
+- id
+- quiz_id
+- question
+- options (JSON)
+- correct_answer
+
+### GuideBookEntry
+- id
+- unit_id
+- topic
+- content
+
+### UserProgress
+- id
+- user_id
+- trackable_id
+- trackable_type
+- status
+- meta_data (JSON)
+
+## Progress Tracking
+
+The system uses polymorphic relationships to track user progress across different types of content:
+- Learning paths
+- Units
+- Lessons
+- Sections
+- Exercises
+
+Progress statuses:
+- not_started
+- in_progress
+- completed
+- failed (for quizzes)
+
+## Exercise Types
+
+1. Multiple Choice
+   - Questions with multiple options
+   - Single correct answer
+
+2. Fill in the Blanks
+   - Text with missing words
+   - Case-insensitive answer checking
+
+3. Matching
+   - Pairs of related items
+   - All pairs must match correctly
+
+4. Writing
+   - Free-form text input
+   - Requires manual review
+
+5. Speaking
+   - Audio recording
+   - Requires manual review
+
+## Authorization
+
+The API uses Laravel Sanctum for authentication and implements role-based access control:
+- Public access to learning content
+- Protected routes for user progress
+- Admin routes for content management
