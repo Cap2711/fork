@@ -10,7 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class AnalyticsController extends BaseAPIController
+class AdminAnalyticsController extends BaseAPIController
 {
     /**
      * Get user engagement metrics with detailed learning behavior analysis.

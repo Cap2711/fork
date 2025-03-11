@@ -10,7 +10,7 @@ use App\Http\Requests\API\Quiz\UpdateQuizRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class QuizController extends BaseAPIController
+class AdminQuizController extends BaseAPIController
 {
     /**
      * Display a listing of all quizzes.

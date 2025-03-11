@@ -12,7 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class ProgressController extends BaseAPIController
+class AdminProgressController extends BaseAPIController
 {
     /**
      * Map of content types to their model classes

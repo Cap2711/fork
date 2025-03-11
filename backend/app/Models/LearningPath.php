@@ -20,11 +20,13 @@ class LearningPath extends Model
         'title',
         'description',
         'target_level',
-        'status'
+        'status',
+        'review_status'
     ];
 
     protected $casts = [
-        'status' => 'string'
+        'status' => 'string',
+        'review_status' => 'string'
     ];
 
     /**
@@ -34,7 +36,8 @@ class LearningPath extends Model
         'title',
         'description',
         'target_level',
-        'status'
+        'status',
+        'review_status'
     ];
 
     /**
@@ -51,6 +54,14 @@ class LearningPath extends Model
     public function progress(): MorphMany
     {
         return $this->morphMany(UserProgress::class, 'trackable');
+    }
+
+    /**
+     * Get all reviews for this learning path.
+     */
+    public function reviews(): MorphMany
+    {
+        return $this->morphMany(Review::class, 'reviewable', 'content_type', 'content_id');
     }
 
     /**

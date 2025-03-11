@@ -10,7 +10,7 @@ use App\Http\Requests\API\Exercise\UpdateExerciseRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class ExerciseController extends BaseAPIController
+class AdminExerciseController extends BaseAPIController
 {
     /**
      * Display a listing of all exercises.

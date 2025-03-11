@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
-class DashboardController extends BaseAPIController
+class AdminDashboardController extends BaseAPIController
 {
     /**
      * Get summary statistics for the dashboard

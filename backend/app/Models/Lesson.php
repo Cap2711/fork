@@ -21,11 +21,15 @@ class Lesson extends Model
         'unit_id',
         'title',
         'description',
-        'order'
+        'order',
+        'status',
+        'review_status'
     ];
 
     protected $casts = [
-        'order' => 'integer'
+        'order' => 'integer',
+        'status' => 'string',
+        'review_status' => 'string'
     ];
 
     /**
@@ -34,7 +38,9 @@ class Lesson extends Model
     protected array $versionedAttributes = [
         'title',
         'description',
-        'order'
+        'order',
+        'status',
+        'review_status'
     ];
 
     /**
@@ -75,6 +81,14 @@ class Lesson extends Model
     public function progress(): MorphMany
     {
         return $this->morphMany(UserProgress::class, 'trackable');
+    }
+
+    /**
+     * Get all reviews for this lesson.
+     */
+    public function reviews(): MorphMany
+    {
+        return $this->morphMany(Review::class, 'reviewable', 'content_type', 'content_id');
     }
 
     /**

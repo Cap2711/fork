@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Response;
 
-class AuditController extends BaseAPIController
+class AdminAuditController extends BaseAPIController
 {
     /**
      * Display a listing of audit logs.

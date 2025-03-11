@@ -9,7 +9,7 @@ use App\Http\Requests\API\GuideBookEntry\UpdateGuideBookEntryRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class GuideBookEntryController extends BaseAPIController
+class AdminGuideBookEntryController extends BaseAPIController
 {
     /**
      * Display a listing of all guide book entries.

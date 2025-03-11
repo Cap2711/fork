@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\API\BaseAPIController;
+use App\Http\Controllers\API\LessonController as BaseLessonController;
 use App\Models\Lesson;
 use App\Models\Unit;
 use App\Http\Requests\API\Lesson\StoreLessonRequest;
@@ -10,10 +11,24 @@ use App\Http\Requests\API\Lesson\UpdateLessonRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class LessonController extends BaseAPIController
+class AdminLessonController extends BaseAPIController
 {
     /**
-     * Display a listing of all lessons.
+     * The base lesson controller instance.
+     */
+    protected $baseLessonController;
+
+    /**
+     * Create a new controller instance.
+     */
+    public function __construct()
+    {
+        $this->baseLessonController = new BaseLessonController();
+    }
+
+    /**
+     * Display a listing of all lessons for admin.
+     * Admins can see all lessons including drafts and archived.
      */
     public function index(Request $request): JsonResponse
     {
@@ -76,7 +91,8 @@ class LessonController extends BaseAPIController
     }
 
     /**
-     * Display the specified lesson.
+     * Display the specified lesson for admin.
+     * Admins can see additional information like version history.
      */
     public function show(Request $request, Lesson $lesson): JsonResponse
     {
@@ -122,6 +138,7 @@ class LessonController extends BaseAPIController
 
     /**
      * Remove the specified lesson.
+     * Admins can delete lessons that aren't published.
      */
     public function destroy(Request $request, Lesson $lesson): JsonResponse
     {
@@ -149,6 +166,7 @@ class LessonController extends BaseAPIController
 
     /**
      * Update the status of a lesson.
+     * Admin-specific method to change lesson status.
      */
     public function updateStatus(Request $request, Lesson $lesson): JsonResponse
     {
@@ -175,6 +193,7 @@ class LessonController extends BaseAPIController
 
     /**
      * Reorder sections within a lesson.
+     * Admin-specific method to reorder sections.
      */
     public function reorderSections(Request $request, Lesson $lesson): JsonResponse
     {

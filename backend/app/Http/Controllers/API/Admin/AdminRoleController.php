@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class RoleController extends BaseAPIController
+class AdminRoleController extends BaseAPIController
 {
     /**
      * Display a listing of roles.

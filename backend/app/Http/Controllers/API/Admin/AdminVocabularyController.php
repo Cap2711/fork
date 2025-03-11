@@ -9,7 +9,7 @@ use App\Http\Requests\API\Vocabulary\UpdateVocabularyRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class VocabularyController extends BaseAPIController
+class AdminVocabularyController extends BaseAPIController
 {
     /**
      * Display a listing of all vocabulary items.

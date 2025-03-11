@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Intervention\Image\Facades\Image;
 
-class MediaController extends BaseAPIController
+class AdminMediaController extends BaseAPIController
 {
     /**
      * Upload a single media file.

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Admin;
 
 use App\Http\Controllers\API\BaseAPIController;
+use App\Http\Controllers\API\UnitController as BaseUnitController;
 use App\Models\Unit;
 use App\Models\LearningPath;
 use App\Http\Requests\API\Unit\StoreUnitRequest;
@@ -10,10 +11,24 @@ use App\Http\Requests\API\Unit\UpdateUnitRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class UnitController extends BaseAPIController
+class AdminUnitController extends BaseAPIController
 {
     /**
-     * Display a listing of all units.
+     * The base unit controller instance.
+     */
+    protected $baseUnitController;
+
+    /**
+     * Create a new controller instance.
+     */
+    public function __construct()
+    {
+        $this->baseUnitController = new BaseUnitController();
+    }
+
+    /**
+     * Display a listing of all units for admin.
+     * Admins can see all units including drafts and archived.
      */
     public function index(Request $request): JsonResponse
     {
@@ -76,7 +91,8 @@ class UnitController extends BaseAPIController
     }
 
     /**
-     * Display the specified unit.
+     * Display the specified unit for admin.
+     * Admins can see additional information like version history.
      */
     public function show(Request $request, Unit $unit): JsonResponse
     {
@@ -94,6 +110,11 @@ class UnitController extends BaseAPIController
         if ($request->has('with_versions')) {
             // Load version history if requested
             $unit->load('versions');
+        }
+
+        if ($request->has('with_reviews')) {
+            // Load reviews if requested
+            $unit->load('reviews');
         }
 
         return $this->sendResponse($unit);
@@ -122,6 +143,7 @@ class UnitController extends BaseAPIController
 
     /**
      * Remove the specified unit.
+     * Admins can delete units that aren't published.
      */
     public function destroy(Request $request, Unit $unit): JsonResponse
     {
@@ -149,6 +171,7 @@ class UnitController extends BaseAPIController
 
     /**
      * Update the status of a unit.
+     * Admin-specific method to change unit status.
      */
     public function updateStatus(Request $request, Unit $unit): JsonResponse
     {
@@ -175,6 +198,7 @@ class UnitController extends BaseAPIController
 
     /**
      * Reorder lessons within a unit.
+     * Admin-specific method to reorder lessons.
      */
     public function reorderLessons(Request $request, Unit $unit): JsonResponse
     {
@@ -191,5 +215,136 @@ class UnitController extends BaseAPIController
         }
 
         return $this->sendResponse($unit->load('lessons'), 'Lessons reordered successfully.');
+    }
+
+    /**
+     * Submit a unit for review.
+     */
+    public function submitForReview(Request $request, Unit $unit): JsonResponse
+    {
+        // Validate that the unit is in draft status
+        if ($unit->status !== 'draft') {
+            return $this->sendError('Only draft units can be submitted for review.', 422);
+        }
+
+        // Update the unit status to 'in_review'
+        $unit->review_status = 'pending';
+        $unit->save();
+
+        // Create a review record
+        $review = $unit->reviews()->create([
+            'submitted_by' => $request->user()->id,
+            'status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+
+        // Notify reviewers (to be implemented)
+        // $this->notifyReviewers($unit, $review);
+
+        // Log the review submission
+        activity()
+            ->performedOn($unit)
+            ->causedBy($request->user())
+            ->withProperties(['review_id' => $review->id])
+            ->log('submitted_for_review');
+
+        return $this->sendResponse($unit, 'Unit submitted for review successfully.');
+    }
+
+    /**
+     * Approve a unit review.
+     */
+    public function approveReview(Request $request, Unit $unit): JsonResponse
+    {
+        // Validate that the unit is in review status
+        if ($unit->review_status !== 'pending') {
+            return $this->sendError('This unit is not pending review.', 422);
+        }
+
+        $request->validate([
+            'review_comment' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        // Get the latest pending review
+        $review = $unit->reviews()->where('status', 'pending')->latest()->first();
+        
+        if (!$review) {
+            return $this->sendError('No pending review found for this unit.', 404);
+        }
+
+        // Update the review
+        $review->update([
+            'reviewed_by' => $request->user()->id,
+            'status' => 'approved',
+            'review_comment' => $request->review_comment,
+            'reviewed_at' => now(),
+        ]);
+
+        // Update the unit status
+        $unit->review_status = 'approved';
+        $unit->save();
+
+        // Notify the content creator (to be implemented)
+        // $this->notifyContentCreator($unit, $review, 'approved');
+
+        // Log the review approval
+        activity()
+            ->performedOn($unit)
+            ->causedBy($request->user())
+            ->withProperties(['review_id' => $review->id])
+            ->log('review_approved');
+
+        return $this->sendResponse($unit, 'Unit review approved successfully.');
+    }
+
+    /**
+     * Reject a unit review.
+     */
+    public function rejectReview(Request $request, Unit $unit): JsonResponse
+    {
+        // Validate that the unit is in review status
+        if ($unit->review_status !== 'pending') {
+            return $this->sendError('This unit is not pending review.', 422);
+        }
+
+        $request->validate([
+            'review_comment' => ['required', 'string', 'max:1000'],
+            'rejection_reason' => ['required', 'string', 'in:content_issues,formatting_issues,accuracy_issues,other'],
+        ]);
+
+        // Get the latest pending review
+        $review = $unit->reviews()->where('status', 'pending')->latest()->first();
+        
+        if (!$review) {
+            return $this->sendError('No pending review found for this unit.', 404);
+        }
+
+        // Update the review
+        $review->update([
+            'reviewed_by' => $request->user()->id,
+            'status' => 'rejected',
+            'review_comment' => $request->review_comment,
+            'rejection_reason' => $request->rejection_reason,
+            'reviewed_at' => now(),
+        ]);
+
+        // Update the unit status
+        $unit->review_status = 'rejected';
+        $unit->save();
+
+        // Notify the content creator (to be implemented)
+        // $this->notifyContentCreator($unit, $review, 'rejected');
+
+        // Log the review rejection
+        activity()
+            ->performedOn($unit)
+            ->causedBy($request->user())
+            ->withProperties([
+                'review_id' => $review->id,
+                'rejection_reason' => $request->rejection_reason
+            ])
+            ->log('review_rejected');
+
+        return $this->sendResponse($unit, 'Unit review rejected successfully.');
     }
 }

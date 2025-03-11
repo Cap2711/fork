@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
-class ContentController extends BaseAPIController
+class AdminContentController extends BaseAPIController
 {
     /**
      * Map of content types to their model classes

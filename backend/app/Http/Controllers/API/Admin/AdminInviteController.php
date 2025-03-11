@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
-class InviteController extends BaseAPIController
+class AdminInviteController extends BaseAPIController
 {
     /**
      * Create a new admin invite
