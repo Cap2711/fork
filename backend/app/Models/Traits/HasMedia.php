@@ -9,7 +9,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Intervention\Image\Image;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Facades\Image;
 
 trait HasMedia
 {
@@ -156,7 +157,7 @@ trait HasMedia
         foreach ($conversions as $name => $conversion) {
             $fileName = sprintf(
                 '%s-%s.%s',
-                pathinfo($media->getAttribute('file_name'), PATHINFO_FILENAME),
+                pathinfo($media->file_name, PATHINFO_FILENAME),
                 $name,
                 $media->getExtension()
             );
@@ -225,7 +226,7 @@ trait HasMedia
 
                 $fileName = sprintf(
                     '%s-%dw.%s',
-                    pathinfo($media->getAttribute('file_name'), PATHINFO_FILENAME),
+                    pathinfo($media->file_name, PATHINFO_FILENAME),
                     $size,
                     $media->getExtension()
                 );
@@ -236,7 +237,7 @@ trait HasMedia
                     $fileName
                 );
 
-                $image->resize($size, null, function ($constraint) {
+                $image = Image::make($file->getRealPath())->resize($size, null, function ($constraint) {
                     $constraint->aspectRatio();
                 });
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\GuideBookEntry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class GuideController extends BaseAPIController
 {
@@ -55,7 +56,7 @@ class GuideController extends BaseAPIController
         ]);
 
         $results = GuideBookEntry::search(
-            $request->query,
+            $request->input('query'),
             $request->input('filters', [])
         );
 
