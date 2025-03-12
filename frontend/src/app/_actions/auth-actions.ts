@@ -209,8 +209,6 @@ export async function logout() {
     // Clear cookies
     cookieStore.set("token", "", { maxAge: 0 });
     cookieStore.set("user_data", "", { maxAge: 0 });
-
-    
   }
 
   // Create redirect response
@@ -221,3 +219,38 @@ export async function logout() {
 export async function getGoogleAuthUrl() {
   return `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
 }
+
+// Create a function to handle the response from Google OAuth
+export const handleOAuthResponse = async (responseUrl: string) => {
+  try {
+    const url = new URL(responseUrl);
+    const code = url.searchParams.get("code");
+    // const userData = JSON.parse(atob(url.searchParams.get("user") || ""));
+
+    if (code) {
+
+      axiosInstance.get<AuthResponse>(`/auth/google/callback?code=${encodeURIComponent(code)}`).then((response) => {
+        
+        // check if response is successfull with token
+        if (response.data.token) {
+
+          console.log("hererererererererererererererererere")
+          // Set cookies
+          // setAuthCookies(response.data);
+        }
+      }); 
+  
+       
+      // Redirect based on user role
+      // const role = userData.role;
+      // if (role === UserRole.ADMIN) {
+      //   window.location.href = "/admin";
+      // } else {
+      //   window.location.href = "/learn";
+      // }
+
+    }
+  } catch (error) {
+    console.error("Google login error:", error);
+  }
+};

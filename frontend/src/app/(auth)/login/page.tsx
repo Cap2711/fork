@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { login } from '@/app/_actions/auth-actions';
+import { getGoogleAuthUrl, login } from '@/app/_actions/auth-actions';
 import { UserRole } from '@/types/user';
 
 export default function LoginPage() {
@@ -33,37 +33,9 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Handle both localhost and IP address scenarios
-    const currentHost = window.location.hostname;
-    const isLocalhost = currentHost === 'localhost';
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-    const redirectUrl = isLocalhost ? 'http://localhost:3000' : `http://${currentHost}:3000`;
-  
-    // Create a function to handle the response from Google OAuth
-    const handleOAuthResponse = async (responseUrl: string) => {
-      try {
-        const url = new URL(responseUrl);
-        const token = url.searchParams.get('token');
-        const userData = JSON.parse(atob(url.searchParams.get('user') || ''));
-        
-        if (token) {
-          localStorage.setItem('token', token);
-          // Redirect based on user role
-          const role = userData.role;
-          if (role === UserRole.ADMIN) {
-            window.location.href = '/admin';
-          } else {
-            window.location.href = '/learn';
-          }
-        }
-      } catch (error) {
-        console.error('Google login error:', error);
-        setError('Failed to process Google login. Please try again.');
-      }
-    };
-
-    window.location.href = `${baseUrl}/auth/google?redirect_url=${encodeURIComponent(redirectUrl)}&callback=${encodeURIComponent(handleOAuthResponse.toString())}`;
+  const handleGoogleLogin = async () => {
+    const url = await getGoogleAuthUrl();
+    window.location.href = url;
   };
 
   return (
@@ -86,14 +58,14 @@ export default function LoginPage() {
           <div className="w-full border-t border-gray-300"></div>
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-white text-gray-500">or</span>
+          <span className="px-2 text-gray-500 bg-white">or</span>
         </div>
       </div>
 
       {/* Email Login Form */}
       <form onSubmit={handleEmailLogin} className="space-y-4">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
+          <div className="px-4 py-3 text-sm text-red-600 border border-red-200 bg-red-50 rounded-xl">
             {error}
           </div>
         )}
@@ -143,7 +115,7 @@ export default function LoginPage() {
         </div>
       </form>
 
-      <div className="text-center space-y-4">
+      <div className="space-y-4 text-center">
         <p className="text-sm text-gray-600">
           {"Don't have an account? "}
           <Link 
