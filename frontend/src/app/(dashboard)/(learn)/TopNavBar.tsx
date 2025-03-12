@@ -25,7 +25,15 @@ import {
 } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 import LearnSideBar from "./LearnSideBar";
-import { DropdownMenuTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { logout } from "@/app/_actions/auth-actions";
 export default function TopNavBar() {
   const userData = {
     name: "Alex Johnson",
@@ -36,13 +44,19 @@ export default function TopNavBar() {
     inProgressPaths: [4],
   };
 
+  const handleLogout = async () => {
+    await logout();
+  };
+
   return (
     <div>
       <header className="sticky top-0 z-10 border-b bg-background">
         <div className="flex items-center px-4">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline"><Menu/></Button>
+              <Button variant="outline">
+                <Menu />
+              </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-64">
               <SheetHeader>
@@ -70,7 +84,11 @@ export default function TopNavBar() {
               <div className="relative">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-full">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full"
+                    >
                       <User className="w-5 h-5" />
                       <span className="sr-only">User profile</span>
                     </Button>
@@ -85,10 +103,13 @@ export default function TopNavBar() {
                       </a>
                     </DropdownMenuItem>
                     <DropdownMenuItem>
-                      <a href="/logout" className="flex w-full">
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center w-full"
+                      >
                         <LogOut className="w-4 h-4 mr-2" />
                         Sign out
-                      </a>
+                      </button>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
