@@ -78,7 +78,7 @@ export default function LearningPathCard({
           />
         </div>
 
-        <Link href={`/path/${path.id}`}>
+        <Link href={`/learn/path/${path.id}`}>
           <Button
             className="w-full"
             disabled={!path.unlocked}

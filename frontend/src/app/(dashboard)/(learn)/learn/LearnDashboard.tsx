@@ -1,12 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { BookOpen, Crown, FlameIcon as Fire, Lightbulb, Star, User, Users, BookText, GraduationCap } from "lucide-react"
+import {  Crown, Lightbulb, Star, Users, BookText, GraduationCap } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ChevronRight, Medal, Mic, Volume2 } from "lucide-react"
+import LearningPathCard from "./LearningPathCard"
+import Image from "next/image"
+
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("path")
@@ -148,29 +152,8 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="container flex items-center justify-between h-16 px-4 md:px-6">
-          <div className="flex items-center gap-2 text-xl font-bold">
-            <BookOpen className="w-6 h-6 text-primary" />
-            <span>EnglishQuest</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 text-amber-500">
-              <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
-              <span className="font-medium">{userData.points}</span>
-            </div>
-            <div className="flex items-center gap-1 text-orange-500">
-              <Fire className="w-5 h-5 text-orange-500 fill-orange-500" />
-              <span className="font-medium">{userData.streak}</span>
-            </div>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <User className="w-5 h-5" />
-              <span className="sr-only">User profile</span>
-            </Button>
-          </div>
-        </div>
-      </header>
+   
+     
       <main className="container px-4 py-6 md:px-6 md:py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold md:text-3xl">Welcome back, {userData.name}!</h1>
@@ -390,13 +373,11 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
-    </div>
+   
   )
 }
 
   
 
-import { ChevronRight, Medal, Mic, Volume2 } from "lucide-react"
-import LearningPathCard from "./LearningPathCard"
-import Image from "next/image"
+
 
