@@ -46,6 +46,10 @@ export default function TopNavBar() {
 
   const handleLogout = async () => {
     await logout();
+
+    // reload the page
+    window.location.href = "/login";
+    
   };
 
   return (

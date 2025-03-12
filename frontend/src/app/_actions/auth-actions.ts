@@ -209,6 +209,8 @@ export async function logout() {
     // Clear cookies
     cookieStore.set("token", "", { maxAge: 0 });
     cookieStore.set("user_data", "", { maxAge: 0 });
+
+    
   }
 
   // Create redirect response
