@@ -9,6 +9,7 @@ import {
   Users,
   BookText,
   GraduationCap,
+  LogOut,
 } from "lucide-react";
 import { ChevronRight, Medal, Mic, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 import LearnSideBar from "./LearnSideBar";
+import { DropdownMenuTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 export default function TopNavBar() {
   const userData = {
     name: "Alex Johnson",
@@ -65,10 +67,32 @@ export default function TopNavBar() {
                 <Fire className="w-5 h-5 text-orange-500 fill-orange-500" />
                 <span className="font-medium">{userData.streak}</span>
               </div>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <User className="w-5 h-5" />
-                <span className="sr-only">User profile</span>
-              </Button>
+              <div className="relative">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full">
+                      <User className="w-5 h-5" />
+                      <span className="sr-only">User profile</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <a href="/account">
+                        <User className="w-4 h-4 mr-2" />
+                        Account Settings
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <a href="/logout" className="flex w-full">
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Sign out
+                      </a>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
         </div>
