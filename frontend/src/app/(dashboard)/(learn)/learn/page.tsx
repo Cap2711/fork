@@ -1,7 +1,8 @@
 import React from 'react'
+import LearnDashboard from './LearnDashboard'
 
 export default function LearnDashboardpage() {
   return (
-    <div>Learn Dashboard Page</div>
+    <div> <LearnDashboard /> </div>
   )
 }
