@@ -143,10 +143,10 @@ export default function LearnPathOverview() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b bg-background">
+      <header className="sticky z-10 bg-green-400 border-b top-[4rem]">
         <div className="container flex items-center justify-between h-16 px-4 md:px-6">
           <div className="flex items-center gap-2">
-            <Link href="/">
+            <Link href="/learn">
               <Button variant="ghost" size="icon" className="mr-2">
                 <ArrowLeft className="w-5 h-5" />
                 <span className="sr-only">Back to Dashboard</span>
@@ -156,16 +156,7 @@ export default function LearnPathOverview() {
               Path {path.id}: {path.name}
             </h1>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 text-amber-500">
-              <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
-              <span className="font-medium">2450</span>
-            </div>
-            <div className="flex items-center gap-1 text-orange-500">
-              <Fire className="w-5 h-5 text-orange-500 fill-orange-500" />
-              <span className="font-medium">7</span>
-            </div>
-          </div>
+           
         </div>
       </header>
 

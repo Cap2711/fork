@@ -236,8 +236,7 @@ export const handleOAuthResponse = async (responseUrl: string) => {
         .then((response) => {
           // check if response is successfull with token
           if (response.data.token) {
-            console.log("hererererererererererererererererere");
-            // Set cookies
+             // Set cookies
             setAuthCookies(response.data);
             // Redirect based on user role
 

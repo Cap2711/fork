@@ -164,6 +164,13 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
+        <div className="m-8">
+          <h2 className="mb-4 text-xl font-bold">Daily Goal</h2>
+          <div className="flex items-center gap-4">
+            <Progress value={60} className="w-full h-3" />
+            <span className="text-sm font-medium">60%</span>
+          </div>
+        </div>
          <Tabs defaultValue="path" className="mb-8" onValueChange={(value) => setActiveTab(value)}>
           <TabsList className="grid w-full max-w-md grid-cols-4">
             <TabsTrigger value="path">Learning Path</TabsTrigger>
@@ -365,13 +372,7 @@ export default function Dashboard() {
           </TabsContent>
         </Tabs>
 
-        <div className="mt-8">
-          <h2 className="mb-4 text-xl font-bold">Daily Goal</h2>
-          <div className="flex items-center gap-4">
-            <Progress value={60} className="w-full h-3" />
-            <span className="text-sm font-medium">60%</span>
-          </div>
-        </div>
+        
       </main>
    
   )
