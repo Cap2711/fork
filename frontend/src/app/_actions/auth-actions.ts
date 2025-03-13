@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import axiosInstance from "@/lib/axios";
 import { UserRole } from "@/types/user";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 interface AuthResponse {
   token: string;
@@ -228,27 +229,29 @@ export const handleOAuthResponse = async (responseUrl: string) => {
     // const userData = JSON.parse(atob(url.searchParams.get("user") || ""));
 
     if (code) {
+      axiosInstance
+        .get<AuthResponse>(
+          `/auth/google/callback?code=${encodeURIComponent(code)}`
+        )
+        .then((response) => {
+          // check if response is successfull with token
+          if (response.data.token) {
+            console.log("hererererererererererererererererere");
+            // Set cookies
+            setAuthCookies(response.data);
+            // Redirect based on user role
 
-      axiosInstance.get<AuthResponse>(`/auth/google/callback?code=${encodeURIComponent(code)}`).then((response) => {
-        
-        // check if response is successfull with token
-        if (response.data.token) {
-
-          console.log("hererererererererererererererererere")
-          // Set cookies
-          // setAuthCookies(response.data);
-        }
-      }); 
-  
-       
-      // Redirect based on user role
-      // const role = userData.role;
-      // if (role === UserRole.ADMIN) {
-      //   window.location.href = "/admin";
-      // } else {
-      //   window.location.href = "/learn";
-      // }
-
+            const userData = response.data.user;
+            const role = userData.role;
+            if (role === UserRole.ADMIN) {
+              //   window.location.href = "/admin";
+              redirect("/admin")
+            } else {
+              //   window.location.href = "/learn";
+              redirect("/learn")
+            }
+          }
+        });
     }
   } catch (error) {
     console.error("Google login error:", error);
