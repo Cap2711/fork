@@ -69,17 +69,17 @@ export async function getQuiz(id: number) {
   }
 }
 
-export async function createQuiz(data: FormData) {
+export async function createQuiz(form: FormData) {
   try {
     const response = await axiosInstance.post<ApiResponse<Quiz>>('/admin/quizzes', {
-      title: data.get('title'),
-      description: data.get('description'),
-      passing_score: data.get('passing_score'),
-      time_limit: data.get('time_limit'),
-      difficulty_level: data.get('difficulty_level'),
-      is_published: data.get('is_published') === 'true',
-      questions: JSON.parse(data.get('questions') as string),
-      lesson_id: data.get('lesson_id'),
+      title: form.get('title'),
+      description: form.get('description'),
+      passing_score: form.get('passing_score'),
+      time_limit: form.get('time_limit'),
+      difficulty_level: form.get('difficulty_level'),
+      is_published: form.get('is_published') === 'true',
+      questions: JSON.parse(form.get('questions') as string),
+      lesson_id: form.get('lesson_id'),
     });
 
     return {
@@ -100,17 +100,17 @@ export async function createQuiz(data: FormData) {
   }
 }
 
-export async function updateQuiz(id: number, data: FormData) {
+export async function updateQuiz(id: number, form: FormData) {
   try {
     const response = await axiosInstance.put<ApiResponse<Quiz>>(`/admin/quizzes/${id}`, {
-      title: data.get('title'),
-      description: data.get('description'),
-      passing_score: data.get('passing_score'),
-      time_limit: data.get('time_limit'),
-      difficulty_level: data.get('difficulty_level'),
-      is_published: data.get('is_published') === 'true',
-      questions: JSON.parse(data.get('questions') as string),
-      lesson_id: data.get('lesson_id'),
+      title: form.get('title'),
+      description: form.get('description'),
+      passing_score: form.get('passing_score'),
+      time_limit: form.get('time_limit'),
+      difficulty_level: form.get('difficulty_level'),
+      is_published: form.get('is_published') === 'true',
+      questions: JSON.parse(form.get('questions') as string),
+      lesson_id: form.get('lesson_id'),
     });
 
     return {

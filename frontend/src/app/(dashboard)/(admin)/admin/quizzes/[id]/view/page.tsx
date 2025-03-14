@@ -2,63 +2,15 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { getQuiz } from '@/app/_actions/admin/quiz-actions';
+import { getQuiz, deleteQuiz, toggleQuizStatus } from '@/app/_actions/admin/quiz-actions';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { AlertDialog } from '@/components/admin/AlertDialog';
 import { useRouter } from 'next/navigation';
-import { deleteQuiz, toggleQuizStatus } from '@/app/_actions/admin/quiz-actions';
 import { toast } from 'sonner';
-import { 
-  Question,
-  QuestionType,
-  MultipleChoiceQuestion as MultipleChoiceType,
-  TranslationQuestion as TranslationType,
-  FillInBlankQuestion as FillInBlankType,
-  MatchingQuestion as MatchingType,
-  ListenTypeQuestion as ListenType,
-  SpeakRecordQuestion as SpeakRecordType
-} from '@/components/admin/questions/types';
-import MultipleChoiceQuestion from '@/components/admin/questions/MultipleChoiceQuestion';
-import TranslationQuestion from '@/components/admin/questions/TranslationQuestion';
-import FillInBlankQuestion from '@/components/admin/questions/FillInBlankQuestion';
-import MatchingQuestion from '@/components/admin/questions/MatchingQuestion';
-import ListenTypeQuestion from '@/components/admin/questions/ListenTypeQuestion';
-import SpeakRecordQuestion from '@/components/admin/questions/SpeakRecordQuestion';
+import { AlertDialog } from '@/components/admin/AlertDialog';
+import QuestionWrapper, { getQuestionLabel } from '@/components/admin/questions/QuestionWrapper';
+import { Question, Media, QuestionType } from '@/components/admin/questions/types';
 
-interface ApiQuestion {
-  id?: number;
-  type?: string;
-  question?: string;
-  correct_answer?: string;
-  options?: string[];
-  text?: string;
-  correct_translation?: string;
-  source_language?: string;
-  target_language?: string;
-  sentence?: string;
-  blanks?: Array<{
-    position: number;
-    correct_answer: string;
-    alternatives?: string[];
-  }>;
-  pairs?: Array<{
-    left: string;
-    right: string;
-    media?: { type: 'image' | 'audio'; url: string; alt?: string };
-  }>;
-  audio?: { type: 'audio'; url: string; alt?: string };
-  correct_text?: string;
-  language?: string;
-  text_to_speak?: string;
-  correct_pronunciation?: string;
-  example_audio?: { type: 'audio'; url: string; alt?: string };
-  explanation?: string;
-  order: number;
-  media?: Array<{ type: 'image' | 'audio'; url: string; alt?: string }>;
-}
-
-interface Quiz {
+interface ApiQuiz {
   id: number;
   lesson_id: number;
   title: string;
@@ -72,106 +24,150 @@ interface Quiz {
   updated_at: string;
 }
 
-const questionTypeLabels: Record<QuestionType, string> = {
-  'multiple-choice': 'Multiple Choice',
-  'translation': 'Translation',
-  'fill-in-blank': 'Fill in the Blanks',
-  'matching': 'Matching',
-  'listen-type': 'Listen and Type',
-  'speak-record': 'Speak and Record',
-  'true-false': 'True/False',
+interface RawMedia {
+  type: 'image' | 'audio';
+  url: string;
+  alt?: string;
+}
+
+interface RawQuestion {
+  id?: number;
+  type?: QuestionType;
+  question?: string;
+  correct_answer?: string;
+  options?: string[];
+  explanation?: string;
+  difficulty_level?: string;
+  order?: number;
+  statement?: string;
+  is_true?: boolean;
+  text?: string;
+  correct_translation?: string;
+  alternatives?: string[];
+  source_language?: string;
+  target_language?: string;
+  sentence?: string;
+  blanks?: Array<{
+    position: number;
+    correct_answer: string;
+    alternatives?: string[];
+  }>;
+  pairs?: Array<{
+    left: string;
+    right: string;
+    media?: RawMedia;
+  }>;
+  text_to_speak?: string;
+  correct_pronunciation?: string;
+  example_audio?: RawMedia;
+  media?: RawMedia[];
+}
+
+const transformMedia = (media?: RawMedia): Media => {
+  if (!media) return { type: 'audio', url: '', alt: '' };
+  return {
+    type: media.type,
+    url: media.url,
+    alt: media.alt || '',
+  };
 };
 
-// Type guards
-const isMultipleChoice = (q: Question): q is MultipleChoiceType => q.type === 'multiple-choice';
-const isTranslation = (q: Question): q is TranslationType => q.type === 'translation';
-const isFillInBlank = (q: Question): q is FillInBlankType => q.type === 'fill-in-blank';
-const isMatching = (q: Question): q is MatchingType => q.type === 'matching';
-const isListenType = (q: Question): q is ListenType => q.type === 'listen-type';
-const isSpeakRecord = (q: Question): q is SpeakRecordType => q.type === 'speak-record';
-
-const convertApiQuestion = (q: ApiQuestion): Question => {
+// Helper function to ensure all required fields are present
+const transformQuestion = (raw: RawQuestion): Question => {
   const baseQuestion = {
-    id: q.id,
-    order: q.order,
-    explanation: q.explanation,
-    media: q.media,
+    id: raw.id || 0,
+    type: raw.type || 'multiple-choice' as const,
+    explanation: raw.explanation || '',
+    difficulty_level: raw.difficulty_level || 'normal',
+    order: raw.order || 0,
+    media: raw.media?.map(transformMedia) || [],
   };
 
-  if (q.type === 'multiple-choice' && q.question && q.correct_answer && q.options) {
-    return {
-      ...baseQuestion,
-      type: 'multiple-choice',
-      question: q.question,
-      correct_answer: q.correct_answer,
-      options: q.options,
-    };
-  }
+  switch (raw.type) {
+    case 'multiple-choice':
+      return {
+        ...baseQuestion,
+        type: 'multiple-choice' as const,
+        question: raw.question || '',
+        correct_answer: raw.correct_answer || '',
+        options: raw.options || [],
+      };
 
-  if (q.type === 'translation' && q.text && q.correct_translation) {
-    return {
-      ...baseQuestion,
-      type: 'translation',
-      text: q.text,
-      correct_translation: q.correct_translation,
-      source_language: q.source_language || 'en',
-      target_language: q.target_language || 'es',
-      alternatives: [],
-    };
-  }
+    case 'true-false':
+      return {
+        ...baseQuestion,
+        type: 'true-false' as const,
+        statement: raw.statement || '',
+        is_true: raw.is_true ?? false,
+      };
 
-  if (q.type === 'fill-in-blank' && q.sentence && q.blanks) {
-    return {
-      ...baseQuestion,
-      type: 'fill-in-blank',
-      sentence: q.sentence,
-      blanks: q.blanks,
-    };
-  }
+    case 'translation':
+      return {
+        ...baseQuestion,
+        type: 'translation' as const,
+        text: raw.text || '',
+        correct_translation: raw.correct_translation || '',
+        alternatives: raw.alternatives || [],
+        source_language: raw.source_language || 'en',
+        target_language: raw.target_language || 'es',
+      };
 
-  if (q.type === 'matching' && q.pairs) {
-    return {
-      ...baseQuestion,
-      type: 'matching',
-      pairs: q.pairs,
-    };
-  }
+    case 'fill-in-blank':
+      return {
+        ...baseQuestion,
+        type: 'fill-in-blank' as const,
+        sentence: raw.sentence || '',
+        blanks: raw.blanks || [{ position: 0, correct_answer: '', alternatives: [] }],
+      };
 
-  if (q.type === 'listen-type' && q.audio && q.correct_text) {
-    return {
-      ...baseQuestion,
-      type: 'listen-type',
-      audio: q.audio,
-      correct_text: q.correct_text,
-      language: q.language || 'en',
-      alternatives: [],
-    };
-  }
+    case 'matching':
+      return {
+        ...baseQuestion,
+        type: 'matching' as const,
+        pairs: raw.pairs ? raw.pairs.map(pair => ({
+          left: pair.left,
+          right: pair.right,
+          media: pair.media ? transformMedia(pair.media) : undefined,
+        })) : [
+          { left: '', right: '' },
+          { left: '', right: '' },
+        ],
+      };
 
-  if (q.type === 'speak-record' && q.text_to_speak && q.correct_pronunciation && q.example_audio) {
-    return {
-      ...baseQuestion,
-      type: 'speak-record',
-      text_to_speak: q.text_to_speak,
-      correct_pronunciation: q.correct_pronunciation,
-      language: q.language || 'en',
-      example_audio: q.example_audio,
-    };
-  }
+    case 'listen-type':
+      return {
+        ...baseQuestion,
+        type: 'listen-type' as const,
+        audio: transformMedia(raw.media?.[0]),
+        correct_text: raw.text || '',
+        alternatives: raw.alternatives || [],
+        language: raw.source_language || 'en',
+      };
 
-  // Default to multiple choice if type is unknown
-  return {
-    ...baseQuestion,
-    type: 'multiple-choice',
-    question: q.question || '',
-    correct_answer: q.correct_answer || '',
-    options: q.options || ['', '', '', ''],
-  };
+    case 'speak-record':
+      return {
+        ...baseQuestion,
+        type: 'speak-record' as const,
+        text_to_speak: raw.text_to_speak || '',
+        correct_pronunciation: raw.correct_pronunciation || '',
+        language: raw.source_language || 'en',
+        example_audio: raw.example_audio ? transformMedia(raw.example_audio) : { type: 'audio', url: '', alt: '' },
+      };
+
+    default:
+      return {
+        ...baseQuestion,
+        type: 'multiple-choice' as const,
+        question: '',
+        correct_answer: '',
+        options: ['', '', '', ''],
+      };
+  }
 };
 
 export default function ViewQuiz({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [quiz, setQuiz] = useState<ApiQuiz | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -181,11 +177,10 @@ export default function ViewQuiz({ params }: { params: { id: string } }) {
       if (result.error) {
         setError(result.error);
       } else if (result.data) {
-        // Convert API questions to typed questions
-        const processedQuestions = result.data.questions.map(convertApiQuestion);
+        // Transform questions to ensure they have all required fields
         setQuiz({
           ...result.data,
-          questions: processedQuestions
+          questions: result.data.questions.map(q => transformQuestion(q as RawQuestion)),
         });
       }
       setLoading(false);
@@ -227,28 +222,6 @@ export default function ViewQuiz({ params }: { params: { id: string } }) {
     }
   };
 
-  const renderQuestion = (question: Question) => {
-    if (isMultipleChoice(question)) {
-      return <MultipleChoiceQuestion question={question} isEditing={false} />;
-    }
-    if (isTranslation(question)) {
-      return <TranslationQuestion question={question} isEditing={false} />;
-    }
-    if (isFillInBlank(question)) {
-      return <FillInBlankQuestion question={question} isEditing={false} />;
-    }
-    if (isMatching(question)) {
-      return <MatchingQuestion question={question} isEditing={false} />;
-    }
-    if (isListenType(question)) {
-      return <ListenTypeQuestion question={question} isEditing={false} />;
-    }
-    if (isSpeakRecord(question)) {
-      return <SpeakRecordQuestion question={question} isEditing={false} />;
-    }
-    return null;
-  };
-
   if (loading) {
     return <div className="flex justify-center items-center h-48">Loading...</div>;
   }
@@ -284,12 +257,15 @@ export default function ViewQuiz({ params }: { params: { id: string } }) {
           >
             {quiz.is_published ? "Unpublish" : "Publish"}
           </Button>
-          <Link href={`/admin/quizzes/${quiz.id}`}>
-            <Button variant="outline">Edit</Button>
-          </Link>
+          <Button
+            variant="outline"
+            onClick={() => router.push(`/admin/quizzes/${quiz.id}`)}
+          >
+            Edit
+          </Button>
           <AlertDialog
             trigger={
-              <Button variant="outline" className="text-red-600 hover:text-red-700">
+              <Button variant="outline" className="text-red-600">
                 Delete
               </Button>
             }
@@ -303,11 +279,11 @@ export default function ViewQuiz({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* Quiz Settings */}
+      {/* Quiz Details */}
       <Card className="p-6">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <h3 className="font-semibold mb-2">Settings</h3>
+            <h3 className="font-semibold mb-2">Quiz Settings</h3>
             <dl className="space-y-2">
               <div>
                 <dt className="text-sm text-muted-foreground">
@@ -344,7 +320,7 @@ export default function ViewQuiz({ params }: { params: { id: string } }) {
             </dl>
           </div>
           <div>
-            <h3 className="font-semibold mb-2">Questions Overview</h3>
+            <h3 className="font-semibold mb-2">Statistics</h3>
             <dl className="space-y-2">
               <div>
                 <dt className="text-sm text-muted-foreground">
@@ -354,20 +330,9 @@ export default function ViewQuiz({ params }: { params: { id: string } }) {
               </div>
               <div>
                 <dt className="text-sm text-muted-foreground">
-                  Question Types
+                  Last Updated
                 </dt>
-                <dd className="space-y-1">
-                  {Object.entries(
-                    quiz.questions.reduce((acc, q) => ({
-                      ...acc,
-                      [q.type]: (acc[q.type] || 0) + 1
-                    }), {} as Record<string, number>)
-                  ).map(([type, count]) => (
-                    <div key={type} className="text-sm">
-                      {questionTypeLabels[type as QuestionType] || type}: {count}
-                    </div>
-                  ))}
-                </dd>
+                <dd>{new Date(quiz.updated_at).toLocaleDateString()}</dd>
               </div>
             </dl>
           </div>
@@ -375,16 +340,17 @@ export default function ViewQuiz({ params }: { params: { id: string } }) {
       </Card>
 
       {/* Questions */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         <h3 className="text-lg font-semibold">Questions</h3>
         {quiz.questions.map((question, index) => (
           <div key={index}>
-            <div className="flex items-center gap-2 mb-2">
-              <h4 className="text-sm font-medium text-muted-foreground">
-                Question {index + 1} - {questionTypeLabels[question.type as QuestionType] || question.type}
-              </h4>
-            </div>
-            {renderQuestion(question)}
+            <h4 className="font-medium mb-2">
+              Question {index + 1} - {getQuestionLabel(question.type)}
+            </h4>
+            <QuestionWrapper
+              question={question}
+              isEditing={false}
+            />
           </div>
         ))}
       </div>

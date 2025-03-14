@@ -8,13 +8,8 @@ import { useRouter } from 'next/navigation';
 import { createQuiz, updateQuiz } from '@/app/_actions/admin/quiz-actions';
 import { toast } from 'sonner';
 import { AlertDialog } from '@/components/admin/AlertDialog';
-import { Question, QuestionType } from '@/components/admin/questions/types';
-import MultipleChoiceQuestion from '@/components/admin/questions/MultipleChoiceQuestion';
-import TranslationQuestion from '@/components/admin/questions/TranslationQuestion';
-import FillInBlankQuestion from '@/components/admin/questions/FillInBlankQuestion';
-import MatchingQuestion from '@/components/admin/questions/MatchingQuestion';
-import ListenTypeQuestion from '@/components/admin/questions/ListenTypeQuestion';
-import SpeakRecordQuestion from '@/components/admin/questions/SpeakRecordQuestion';
+import { Question } from '@/components/admin/questions/types';
+import QuestionFormSection from '@/components/admin/questions/QuestionFormSection';
 
 interface QuizFormProps {
   lessonId?: number;
@@ -30,99 +25,24 @@ interface QuizFormProps {
   };
 }
 
-const questionTypes: { type: QuestionType; label: string }[] = [
-  { type: 'multiple-choice', label: 'Multiple Choice' },
-  { type: 'translation', label: 'Translation' },
-  { type: 'fill-in-blank', label: 'Fill in the Blanks' },
-  { type: 'matching', label: 'Matching Pairs' },
-  { type: 'listen-type', label: 'Listen and Type' },
-  { type: 'speak-record', label: 'Speak and Record' },
-];
-
-const getEmptyQuestion = (type: QuestionType): Question => {
-  const baseQuestion = {
-    type,
-    order: 0,
-    explanation: '',
-    difficulty_level: 'normal',
-  };
-
-  switch (type) {
-    case 'multiple-choice':
-      return {
-        ...baseQuestion,
-        type,
-        question: '',
-        correct_answer: '',
-        options: ['', '', '', ''],
-      };
-    case 'translation':
-      return {
-        ...baseQuestion,
-        type,
-        text: '',
-        correct_translation: '',
-        alternatives: [],
-        source_language: 'en',
-        target_language: 'es',
-      };
-    case 'fill-in-blank':
-      return {
-        ...baseQuestion,
-        type,
-        sentence: '',
-        blanks: [{
-          position: 0,
-          correct_answer: '',
-          alternatives: [],
-        }],
-      };
-    case 'matching':
-      return {
-        ...baseQuestion,
-        type,
-        pairs: [
-          { left: '', right: '' },
-          { left: '', right: '' },
-        ],
-      };
-    case 'listen-type':
-      return {
-        ...baseQuestion,
-        type,
-        audio: {
-          type: 'audio',
-          url: '',
-        },
-        correct_text: '',
-        alternatives: [],
-        language: 'en',
-      };
-    case 'speak-record':
-      return {
-        ...baseQuestion,
-        type,
-        text_to_speak: '',
-        correct_pronunciation: '',
-        language: 'en',
-        example_audio: {
-          type: 'audio',
-          url: '',
-        },
-      };
-    default:
-      throw new Error('Unknown question type');
-  }
-};
+interface QuizSubmitData {
+  title: string;
+  description: string;
+  passing_score: number;
+  time_limit: number | null;
+  difficulty_level: string;
+  is_published: boolean;
+  questions: Question[];
+  lesson_id?: number;
+}
 
 export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showDiscardWarning, setShowDiscardWarning] = useState(false);
-  const [showQuestionTypeSelector, setShowQuestionTypeSelector] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<QuizSubmitData>({
     title: initialData?.title || '',
     description: initialData?.description || '',
     passing_score: initialData?.passing_score || 70,
@@ -130,40 +50,11 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
     difficulty_level: initialData?.difficulty_level || 'beginner',
     is_published: initialData?.is_published || false,
     questions: initialData?.questions || [],
+    lesson_id: lessonId,
   });
 
-  const updateField = (field: string, value: string | number | boolean) => {
+  const updateField = (field: string, value: string | number | boolean | Question[]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    setHasUnsavedChanges(true);
-  };
-
-  const addQuestion = (type: QuestionType) => {
-    const newQuestion = getEmptyQuestion(type);
-    newQuestion.order = formData.questions.length;
-    setFormData(prev => ({
-      ...prev,
-      questions: [...prev.questions, newQuestion],
-    }));
-    setHasUnsavedChanges(true);
-    setShowQuestionTypeSelector(false);
-  };
-
-  const updateQuestion = (index: number, updatedQuestion: Question) => {
-    setFormData(prev => ({
-      ...prev,
-      questions: prev.questions.map((q, i) =>
-        i === index ? updatedQuestion : q
-      ),
-    }));
-    setHasUnsavedChanges(true);
-  };
-
-  const removeQuestion = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      questions: prev.questions.filter((_, i) => i !== index)
-        .map((q, i) => ({ ...q, order: i })),
-    }));
     setHasUnsavedChanges(true);
   };
 
@@ -172,21 +63,9 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
     setLoading(true);
 
     try {
-      const form = new FormData();
-      Object.entries(formData).forEach(([key, value]) => {
-        if (key === 'questions') {
-          form.append(key, JSON.stringify(value));
-        } else {
-          form.append(key, value.toString());
-        }
-      });
-
-      if (lessonId) {
-        form.append('lesson_id', lessonId.toString());
-      }
-
-      const action = initialData?.id ? updateQuiz : createQuiz;
-      const result = await action(initialData?.id || 0, form);
+      const result = initialData?.id 
+        ? await updateQuiz(initialData.id, formData)
+        : await createQuiz(formData);
 
       if (result.error) {
         toast.error('Error', {
@@ -214,31 +93,6 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
       setShowDiscardWarning(true);
     } else {
       router.back();
-    }
-  };
-
-  const renderQuestion = (question: Question, index: number) => {
-    const commonProps = {
-      isEditing: true,
-      onUpdate: (updated: Question) => updateQuestion(index, updated),
-      onDelete: () => removeQuestion(index),
-    };
-
-    switch (question.type) {
-      case 'multiple-choice':
-        return <MultipleChoiceQuestion key={index} question={question} {...commonProps} />;
-      case 'translation':
-        return <TranslationQuestion key={index} question={question} {...commonProps} />;
-      case 'fill-in-blank':
-        return <FillInBlankQuestion key={index} question={question} {...commonProps} />;
-      case 'matching':
-        return <MatchingQuestion key={index} question={question} {...commonProps} />;
-      case 'listen-type':
-        return <ListenTypeQuestion key={index} question={question} {...commonProps} />;
-      case 'speak-record':
-        return <SpeakRecordQuestion key={index} question={question} {...commonProps} />;
-      default:
-        return null;
     }
   };
 
@@ -330,49 +184,10 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
       </Card>
 
       {/* Questions */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold">Questions</h3>
-          <Button
-            type="button"
-            onClick={() => setShowQuestionTypeSelector(true)}
-          >
-            Add Question
-          </Button>
-        </div>
-
-        {/* Question Type Selector */}
-        {showQuestionTypeSelector && (
-          <Card className="p-6">
-            <h4 className="font-medium mb-4">Select Question Type</h4>
-            <div className="grid grid-cols-2 gap-4">
-              {questionTypes.map(({ type, label }) => (
-                <Button
-                  key={type}
-                  type="button"
-                  variant="outline"
-                  onClick={() => addQuestion(type)}
-                  className="h-auto py-4 text-left justify-start"
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Questions List */}
-        {formData.questions.map((question, index) => (
-          <div key={index} className="space-y-2">
-            <div className="flex items-center gap-2 mb-2">
-              <h4 className="font-medium">
-                Question {index + 1} - {questionTypes.find(t => t.type === question.type)?.label}
-              </h4>
-            </div>
-            {renderQuestion(question, index)}
-          </div>
-        ))}
-      </div>
+      <QuestionFormSection 
+        questions={formData.questions}
+        onQuestionsChange={(questions) => updateField('questions', questions)}
+      />
 
       {/* Actions */}
       <div className="flex justify-end space-x-2">
