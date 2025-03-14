@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
 import { logout } from '@/app/_actions/auth-actions';
@@ -17,42 +18,49 @@ interface AdminTopbarProps {
 
 export default function AdminTopbar({ onMenuClick }: AdminTopbarProps) {
   return (
-    <div className="bg-white shadow-sm lg:pl-64">
-      <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Menu button - mobile only */}
-        <button
-          onClick={onMenuClick}
-          className="lg:hidden p-2 text-gray-500 hover:text-gray-700"
-        >
-          <svg
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+    <div className="sticky top-0 z-20 bg-white border-b shadow-sm">
+      <div className="px-4 h-16 flex items-center justify-between gap-4">
+        {/* Left section with menu button */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onMenuClick}
+            className="lg:hidden -ml-2 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
+            aria-label="Open menu"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 12h16M4 18h16"
-            />
-          </svg>
-        </button>
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
 
-        {/* Logo - mobile only */}
-        <div className="lg:hidden">
-          <Link href="/admin" className="text-xl font-bold">
-            Admin
-          </Link>
+          {/* Mobile Logo */}
+          <div className="lg:hidden">
+            <Link href="/admin" className="font-semibold text-lg">
+              Admin
+            </Link>
+          </div>
         </div>
 
         {/* Right section */}
         <div className="flex items-center gap-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="hover:bg-gray-100 rounded-full w-10 h-10"
+              >
                 <svg
-                  className="h-6 w-6"
+                  className="h-5 w-5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -66,15 +74,24 @@ export default function AdminTopbar({ onMenuClick }: AdminTopbarProps) {
                 </svg>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/admin/profile">Profile</Link>
+                <Link href="/admin/profile" className="cursor-pointer">
+                  Profile
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/admin/settings">Settings</Link>
+                <Link href="/admin/settings" className="cursor-pointer">
+                  Settings
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600" onClick={() => logout()}>
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600 cursor-pointer"
+                onClick={() => logout()}
+              >
                 Logout
               </DropdownMenuItem>
             </DropdownMenuContent>

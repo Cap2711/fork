@@ -31,6 +31,7 @@ export default function LearningPathsPage() {
   const loadLearningPaths = async () => {
     const result = await getLearningPaths();
     if (result.error) {
+      
       setError(result.error);
     } else {
       setPaths(result.data || []);

@@ -117,16 +117,19 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
     e.preventDefault();
     setLoading(true);
 
-    try {
-      const form = new FormData();
-      form.append('title', formData.title);
-      form.append('description', formData.description);
-      form.append('passing_score', formData.passing_score.toString());
-      form.append('time_limit', formData.time_limit.toString());
-      form.append('difficulty_level', formData.difficulty_level);
-      form.append('is_published', formData.is_published.toString());
-      form.append('questions', JSON.stringify(formData.questions));
+    const form = new FormData();
+    form.append('title', formData.title);
+    form.append('description', formData.description);
+    form.append('passing_score', formData.passing_score.toString());
+    form.append('time_limit', formData.time_limit.toString());
+    form.append('difficulty_level', formData.difficulty_level);
+    form.append('is_published', formData.is_published.toString());
+    form.append('questions', JSON.stringify(formData.questions));
+    if (lessonId) {
+      form.append('lesson_id', lessonId.toString());
+    }
 
+    try {
       if (initialData?.id) {
         const result = await updateQuiz(initialData.id, form);
         if (result.error) {
@@ -141,8 +144,8 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
           router.refresh();
           router.push(`/admin/lessons/${lessonId}/view`);
         }
-      } else if (lessonId) {
-        const result = await createQuiz(lessonId, form);
+      } else {
+        const result = await createQuiz(form);
         if (result.error) {
           toast.error('Error', {
             description: result.error,
@@ -156,7 +159,7 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
           router.push(`/admin/lessons/${lessonId}/view`);
         }
       }
-    } catch (error) {
+    } catch {
       toast.error('Error', {
         description: 'An unexpected error occurred',
       });
