@@ -8,7 +8,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
       <AdminSidebar 
         isOpen={isSidebarOpen} 
@@ -16,12 +16,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       />
 
       {/* Main Content Area */}
-      <div className="lg:pl-64">
+      <div className="ml-64 flex flex-col min-h-screen">
         {/* Top Navigation */}
         <AdminTopbar onMenuClick={() => setIsSidebarOpen(true)} />
 
         {/* Main Content */}
-        <main className="py-6 px-4 sm:px-6 lg:px-8">
+        <main className="flex-1 py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
           {children}
         </main>
       </div>

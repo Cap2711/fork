@@ -8,15 +8,24 @@ export default function GoogleCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Handle the OAuth callback
     const completeAuth = async () => {
-      if (typeof window !== 'undefined') {
-        await handleOAuthResponse(window.location.href);
+      try {
+        if (typeof window === 'undefined') return;
+
+        // Get redirect path from OAuth response
+        const redirectPath = await handleOAuthResponse(window.location.href);
+        
+        // Navigate to the appropriate path
+        router.push(redirectPath);
+      } catch (error) {
+        console.error('Authentication error:', error);
+        // Redirect to login on error
+        router.push('/login?error=auth_failed');
       }
     };
 
     completeAuth();
-  }, [router]);
+  }, []); // Remove router from dependencies since it's stable
 
   return (
     <div className="flex items-center justify-center min-h-screen">

@@ -4,7 +4,6 @@ import { NextResponse } from "next/server";
 import axiosInstance from "@/lib/axios";
 import { UserRole } from "@/types/user";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 
 interface AuthResponse {
   token: string;
@@ -222,37 +221,31 @@ export async function getGoogleAuthUrl() {
 }
 
 // Create a function to handle the response from Google OAuth
-export const handleOAuthResponse = async (responseUrl: string) => {
+export async function handleOAuthResponse(responseUrl: string) {
   try {
     const url = new URL(responseUrl);
     const code = url.searchParams.get("code");
-    // const userData = JSON.parse(atob(url.searchParams.get("user") || ""));
 
-    if (code) {
-      axiosInstance
-        .get<AuthResponse>(
-          `/auth/google/callback?code=${encodeURIComponent(code)}`
-        )
-        .then((response) => {
-          // check if response is successfull with token
-          if (response.data.token) {
-             // Set cookies
-            setAuthCookies(response.data);
-            // Redirect based on user role
-
-            const userData = response.data.user;
-            const role = userData.role;
-            if (role === UserRole.ADMIN) {
-              //   window.location.href = "/admin";
-              redirect("/admin")
-            } else {
-              //   window.location.href = "/learn";
-              redirect("/learn")
-            }
-          }
-        });
+    if (!code) {
+      throw new Error("No authorization code received from Google");
     }
+
+    const response = await axiosInstance.get<AuthResponse>(
+      `/auth/google/callback?code=${encodeURIComponent(code)}`
+    );
+
+    if (!response.data.token) {
+      throw new Error("No token received in response");
+    }
+
+    // Set cookies
+    await setAuthCookies(response.data);
+
+    // Return redirect path based on user role
+    return response.data.user.role === UserRole.ADMIN ? "/admin" : "/learn";
+    
   } catch (error) {
     console.error("Google login error:", error);
+    throw error;
   }
 };
