@@ -3,6 +3,7 @@
 import QuizForm from '@/components/admin/forms/QuizForm';
 import { getQuiz } from '@/app/_actions/admin/quiz-actions';
 import { useEffect, useState } from 'react';
+import { Question } from '@/components/admin/questions/types';
 
 interface Quiz {
   id: number;
@@ -15,6 +16,7 @@ interface Quiz {
   is_published: boolean;
   questions: Array<{
     id?: number;
+    type?: string;
     question: string;
     correct_answer: string;
     options: string[];
@@ -62,12 +64,18 @@ export default function EditQuiz({ params }: { params: { id: string } }) {
     );
   }
 
+  // Transform questions to include required type field
+  const transformedQuestions: Question[] = quiz.questions.map(q => ({
+    ...q,
+    type: q.type || 'multiple-choice', // Default to multiple choice for legacy questions
+  })) as Question[];
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Edit Quiz</h2>
         <p className="text-muted-foreground">
-          Update the quiz details and questions
+          Update quiz details and questions
         </p>
       </div>
 
@@ -81,7 +89,7 @@ export default function EditQuiz({ params }: { params: { id: string } }) {
           time_limit: quiz.time_limit,
           difficulty_level: quiz.difficulty_level,
           is_published: quiz.is_published,
-          questions: quiz.questions,
+          questions: transformedQuestions,
         }}
       />
     </div>

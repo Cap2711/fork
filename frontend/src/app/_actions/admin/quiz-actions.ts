@@ -2,15 +2,7 @@
 
 import axiosInstance from '@/lib/axios';
 import { ApiResponse } from '@/lib/axios';
-
-interface QuizQuestion {
-  id?: number;
-  question: string;
-  correct_answer: string;
-  options: string[];
-  explanation: string;
-  order: number;
-}
+import { Question } from '@/components/admin/questions/types';
 
 interface Quiz {
   id: number;
@@ -21,7 +13,7 @@ interface Quiz {
   time_limit: number | null;
   difficulty_level: string;
   is_published: boolean;
-  questions: QuizQuestion[];
+  questions: Question[];
   created_at: string;
   updated_at: string;
 }
@@ -77,16 +69,17 @@ export async function getQuiz(id: number) {
   }
 }
 
-export async function createQuiz(formData: FormData) {
+export async function createQuiz(data: FormData) {
   try {
     const response = await axiosInstance.post<ApiResponse<Quiz>>('/admin/quizzes', {
-      title: formData.get('title'),
-      description: formData.get('description'),
-      passing_score: formData.get('passing_score'),
-      time_limit: formData.get('time_limit'),
-      difficulty_level: formData.get('difficulty_level'),
-      is_published: formData.get('is_published') === 'true',
-      questions: JSON.parse(formData.get('questions') as string)
+      title: data.get('title'),
+      description: data.get('description'),
+      passing_score: data.get('passing_score'),
+      time_limit: data.get('time_limit'),
+      difficulty_level: data.get('difficulty_level'),
+      is_published: data.get('is_published') === 'true',
+      questions: JSON.parse(data.get('questions') as string),
+      lesson_id: data.get('lesson_id'),
     });
 
     return {
@@ -107,16 +100,17 @@ export async function createQuiz(formData: FormData) {
   }
 }
 
-export async function updateQuiz(id: number, formData: FormData) {
+export async function updateQuiz(id: number, data: FormData) {
   try {
     const response = await axiosInstance.put<ApiResponse<Quiz>>(`/admin/quizzes/${id}`, {
-      title: formData.get('title'),
-      description: formData.get('description'),
-      passing_score: formData.get('passing_score'),
-      time_limit: formData.get('time_limit'),
-      difficulty_level: formData.get('difficulty_level'),
-      is_published: formData.get('is_published') === 'true',
-      questions: JSON.parse(formData.get('questions') as string)
+      title: data.get('title'),
+      description: data.get('description'),
+      passing_score: data.get('passing_score'),
+      time_limit: data.get('time_limit'),
+      difficulty_level: data.get('difficulty_level'),
+      is_published: data.get('is_published') === 'true',
+      questions: JSON.parse(data.get('questions') as string),
+      lesson_id: data.get('lesson_id'),
     });
 
     return {
