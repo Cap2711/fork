@@ -3,13 +3,13 @@
 import axiosInstance from '@/lib/axios';
 import { ApiResponse } from '@/lib/axios';
 
-interface Unit {
+interface LearningPath {
   id: number;
-  learning_path_id: number;
   title: string;
   description: string;
-  order: number;
+  difficulty_level: string;
   estimated_duration: number;
+  prerequisites: string[];
   is_published: boolean;
   created_at: string;
   updated_at: string;
@@ -24,13 +24,9 @@ function isAxiosError(error: unknown): error is { response?: { data?: ApiError }
   return error != null && typeof error === 'object' && 'isAxiosError' in error;
 }
 
-export async function getUnits(learningPathId?: number) {
+export async function getLearningPaths() {
   try {
-    const url = learningPathId 
-      ? `/admin/learning-paths/${learningPathId}/units`
-      : '/admin/units';
-    
-    const response = await axiosInstance.get<ApiResponse<Unit[]>>(url);
+    const response = await axiosInstance.get<ApiResponse<LearningPath[]>>('/admin/learning-paths');
     return {
       data: response.data.data,
       error: null
@@ -39,7 +35,7 @@ export async function getUnits(learningPathId?: number) {
     if (isAxiosError(error)) {
       return {
         data: null,
-        error: error.response?.data?.message || 'Failed to fetch units'
+        error: error.response?.data?.message || 'Failed to fetch learning paths'
       };
     }
     return {
@@ -49,9 +45,9 @@ export async function getUnits(learningPathId?: number) {
   }
 }
 
-export async function getUnit(id: number) {
+export async function getLearningPath(id: number) {
   try {
-    const response = await axiosInstance.get<ApiResponse<Unit>>(`/admin/units/${id}`);
+    const response = await axiosInstance.get<ApiResponse<LearningPath>>(`/admin/learning-paths/${id}`);
     return {
       data: response.data.data,
       error: null
@@ -60,7 +56,7 @@ export async function getUnit(id: number) {
     if (isAxiosError(error)) {
       return {
         data: null,
-        error: error.response?.data?.message || 'Failed to fetch unit'
+        error: error.response?.data?.message || 'Failed to fetch learning path'
       };
     }
     return {
@@ -70,13 +66,14 @@ export async function getUnit(id: number) {
   }
 }
 
-export async function createUnit(learningPathId: number, formData: FormData) {
+export async function createLearningPath(formData: FormData) {
   try {
-    const response = await axiosInstance.post<ApiResponse<Unit>>(`/admin/learning-paths/${learningPathId}/units`, {
+    const response = await axiosInstance.post<ApiResponse<LearningPath>>('/admin/learning-paths', {
       title: formData.get('title'),
       description: formData.get('description'),
-      order: formData.get('order'),
+      difficulty_level: formData.get('difficulty_level'),
       estimated_duration: formData.get('estimated_duration'),
+      prerequisites: formData.getAll('prerequisites'),
       is_published: formData.get('is_published') === 'true'
     });
 
@@ -88,7 +85,7 @@ export async function createUnit(learningPathId: number, formData: FormData) {
     if (isAxiosError(error)) {
       return {
         data: null,
-        error: error.response?.data?.message || 'Failed to create unit'
+        error: error.response?.data?.message || 'Failed to create learning path'
       };
     }
     return {
@@ -98,13 +95,14 @@ export async function createUnit(learningPathId: number, formData: FormData) {
   }
 }
 
-export async function updateUnit(id: number, formData: FormData) {
+export async function updateLearningPath(id: number, formData: FormData) {
   try {
-    const response = await axiosInstance.put<ApiResponse<Unit>>(`/admin/units/${id}`, {
+    const response = await axiosInstance.put<ApiResponse<LearningPath>>(`/admin/learning-paths/${id}`, {
       title: formData.get('title'),
       description: formData.get('description'),
-      order: formData.get('order'),
+      difficulty_level: formData.get('difficulty_level'),
       estimated_duration: formData.get('estimated_duration'),
+      prerequisites: formData.getAll('prerequisites'),
       is_published: formData.get('is_published') === 'true'
     });
 
@@ -116,7 +114,7 @@ export async function updateUnit(id: number, formData: FormData) {
     if (isAxiosError(error)) {
       return {
         data: null,
-        error: error.response?.data?.message || 'Failed to update unit'
+        error: error.response?.data?.message || 'Failed to update learning path'
       };
     }
     return {
@@ -126,14 +124,14 @@ export async function updateUnit(id: number, formData: FormData) {
   }
 }
 
-export async function deleteUnit(id: number) {
+export async function deleteLearningPath(id: number) {
   try {
-    await axiosInstance.delete<ApiResponse<void>>(`/admin/units/${id}`);
+    await axiosInstance.delete<ApiResponse<void>>(`/admin/learning-paths/${id}`);
     return { error: null };
   } catch (error) {
     if (isAxiosError(error)) {
       return {
-        error: error.response?.data?.message || 'Failed to delete unit'
+        error: error.response?.data?.message || 'Failed to delete learning path'
       };
     }
     return {
@@ -142,9 +140,9 @@ export async function deleteUnit(id: number) {
   }
 }
 
-export async function toggleUnitStatus(id: number) {
+export async function toggleLearningPathStatus(id: number) {
   try {
-    const response = await axiosInstance.post<ApiResponse<{ is_published: boolean }>>(`/admin/units/${id}/toggle-status`);
+    const response = await axiosInstance.post<ApiResponse<{ is_published: boolean }>>(`/admin/learning-paths/${id}/toggle-status`);
     return {
       data: response.data.data,
       error: null
@@ -153,35 +151,11 @@ export async function toggleUnitStatus(id: number) {
     if (isAxiosError(error)) {
       return {
         data: null,
-        error: error.response?.data?.message || 'Failed to toggle unit status'
+        error: error.response?.data?.message || 'Failed to toggle learning path status'
       };
     }
     return {
       data: null,
-      error: 'An unexpected error occurred'
-    };
-  }
-}
-
-export async function reorderUnits(learningPathId: number, unitOrders: { id: number; order: number }[]) {
-  try {
-    const response = await axiosInstance.put<ApiResponse<{ success: boolean }>>(
-      `/admin/learning-paths/${learningPathId}/units/reorder`,
-      { units: unitOrders }
-    );
-    return {
-      success: response.data.data.success,
-      error: null
-    };
-  } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to reorder units'
-      };
-    }
-    return {
-      success: false,
       error: 'An unexpected error occurred'
     };
   }
