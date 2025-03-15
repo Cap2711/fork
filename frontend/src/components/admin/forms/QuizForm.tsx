@@ -1,59 +1,53 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useState } from 'react';
+import { QuestionFormSection } from '@/components/admin/questions/QuestionFormSection';
+import { Question } from '@/components/admin/questions/types';
 import { useRouter } from 'next/navigation';
-import { createQuiz, updateQuiz } from '@/app/_actions/admin/quiz-actions';
 import { toast } from 'sonner';
 import { AlertDialog } from '@/components/admin/AlertDialog';
-import { Question } from '@/components/admin/questions/types';
-import QuestionFormSection from '@/components/admin/questions/QuestionFormSection';
+import { QuizFormData, QuizType, DEFAULT_QUIZ_VALUES, DEFAULT_SECTION_QUIZ_VALUES } from '@/types/quiz';
 
 interface QuizFormProps {
-  lessonId?: number;
-  initialData?: {
-    id?: number;
-    title: string;
-    description: string;
-    passing_score: number;
-    time_limit: number | null;
-    difficulty_level: string;
-    is_published: boolean;
-    questions: Question[];
-  };
+  lessonId: number;
+  sectionId?: number;
+  initialData?: QuizFormData;
+  onSubmit: (data: QuizFormData) => Promise<{ error?: string }>;
 }
 
-interface QuizSubmitData {
-  title: string;
-  description: string;
-  passing_score: number;
-  time_limit: number | null;
-  difficulty_level: string;
-  is_published: boolean;
-  questions: Question[];
-  lesson_id?: number;
-}
-
-export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
+export default function QuizForm({
+  lessonId,
+  sectionId,
+  initialData,
+  onSubmit,
+}: QuizFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showDiscardWarning, setShowDiscardWarning] = useState(false);
 
-  const [formData, setFormData] = useState<QuizSubmitData>({
-    title: initialData?.title || '',
-    description: initialData?.description || '',
-    passing_score: initialData?.passing_score || 70,
-    time_limit: initialData?.time_limit || 0,
-    difficulty_level: initialData?.difficulty_level || 'beginner',
-    is_published: initialData?.is_published || false,
-    questions: initialData?.questions || [],
-    lesson_id: lessonId,
+  const [formData, setFormData] = useState<QuizFormData>(() => {
+    if (initialData) return initialData;
+
+    // Set defaults based on whether this is a section quiz or lesson quiz
+    const baseValues = { ...DEFAULT_QUIZ_VALUES, lesson_id: lessonId };
+    if (sectionId) {
+      return {
+        ...baseValues,
+        ...DEFAULT_SECTION_QUIZ_VALUES,
+        section_id: sectionId,
+      };
+    }
+    return baseValues;
   });
 
-  const updateField = (field: string, value: string | number | boolean | Question[]) => {
+  const updateField = <K extends keyof QuizFormData>(
+    field: K,
+    value: QuizFormData[K]
+  ) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setHasUnsavedChanges(true);
   };
@@ -63,9 +57,7 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
     setLoading(true);
 
     try {
-      const result = initialData?.id 
-        ? await updateQuiz(initialData.id, formData)
-        : await createQuiz(formData);
+      const result = await onSubmit(formData);
 
       if (result.error) {
         toast.error('Error', {
@@ -73,11 +65,17 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
         });
       } else {
         toast.success('Success', {
-          description: `Quiz ${initialData?.id ? 'updated' : 'created'} successfully`,
+          description: `${formData.type === 'section_practice' ? 'Practice Quiz' : 'Lesson Quiz'} ${
+            initialData ? 'updated' : 'created'
+          } successfully`,
         });
         setHasUnsavedChanges(false);
         router.refresh();
-        router.push(`/admin/lessons/${lessonId}/view`);
+        if (formData.type === 'lesson_assessment') {
+          router.push(`/admin/lessons/${lessonId}/view`);
+        } else {
+          router.push(`/admin/lessons/${lessonId}/sections/${sectionId}/view`);
+        }
       }
     } catch {
       toast.error('Error', {
@@ -96,11 +94,15 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
     }
   };
 
+  const handleQuestionsChange = (questions: Question[]) => {
+    updateField('questions', questions);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Quiz Settings */}
       <Card className="p-6">
         <div className="space-y-4">
+          {/* Basic Information */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Title</label>
             <Input
@@ -120,74 +122,208 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Passing Score (%)
-              </label>
-              <Input
-                type="number"
-                min="0"
-                max="100"
-                value={formData.passing_score}
-                onChange={(e) =>
-                  updateField('passing_score', parseInt(e.target.value) || 0)
-                }
-                required
-              />
+          {/* Quiz Settings */}
+          <div className="space-y-4">
+            {/* Common Settings */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Passing Score (%)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={formData.passing_score}
+                  onChange={(e) =>
+                    updateField('passing_score', parseInt(e.target.value) || 0)
+                  }
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Time Limit (minutes)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.time_limit || ''}
+                  onChange={(e) =>
+                    updateField(
+                      'time_limit',
+                      e.target.value ? parseInt(e.target.value) : undefined
+                    )
+                  }
+                  placeholder="No limit"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">XP Reward</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.xp_reward}
+                  onChange={(e) =>
+                    updateField('xp_reward', parseInt(e.target.value) || 0)
+                  }
+                  required
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Time Limit (minutes, 0 for no limit)
-              </label>
-              <Input
-                type="number"
-                min="0"
-                value={formData.time_limit}
-                onChange={(e) =>
-                  updateField('time_limit', parseInt(e.target.value) || 0)
-                }
-                required
-              />
+            {/* Quiz Settings */}
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="font-medium">Quiz Settings</h3>
+              <div className="space-y-2">
+                {/* Common settings */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="show_feedback"
+                    checked={formData.settings.show_feedback}
+                    onChange={(e) =>
+                      updateField('settings', {
+                        ...formData.settings,
+                        show_feedback: e.target.checked,
+                      })
+                    }
+                    className="rounded border-gray-300"
+                  />
+                  <label className="text-sm" htmlFor="show_feedback">
+                    Show feedback after each question
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="allow_retry"
+                    checked={formData.settings.allow_retry}
+                    onChange={(e) =>
+                      updateField('settings', {
+                        ...formData.settings,
+                        allow_retry: e.target.checked,
+                      })
+                    }
+                    className="rounded border-gray-300"
+                  />
+                  <label className="text-sm" htmlFor="allow_retry">
+                    Allow multiple attempts
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="shuffle_questions"
+                    checked={formData.settings.shuffle_questions}
+                    onChange={(e) =>
+                      updateField('settings', {
+                        ...formData.settings,
+                        shuffle_questions: e.target.checked,
+                      })
+                    }
+                    className="rounded border-gray-300"
+                  />
+                  <label className="text-sm" htmlFor="shuffle_questions">
+                    Shuffle questions
+                  </label>
+                </div>
+
+                {/* Lesson assessment specific settings */}
+                {formData.type === 'lesson_assessment' && (
+                  <>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="require_passing_grade"
+                        checked={formData.settings.require_passing_grade}
+                        onChange={(e) =>
+                          updateField('settings', {
+                            ...formData.settings,
+                            require_passing_grade: e.target.checked,
+                          })
+                        }
+                        className="rounded border-gray-300"
+                      />
+                      <label className="text-sm" htmlFor="require_passing_grade">
+                        Require passing grade to complete lesson
+                      </label>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="unlock_next_lesson"
+                        checked={formData.settings.unlock_next_lesson}
+                        onChange={(e) =>
+                          updateField('settings', {
+                            ...formData.settings,
+                            unlock_next_lesson: e.target.checked,
+                          })
+                        }
+                        className="rounded border-gray-300"
+                      />
+                      <label className="text-sm" htmlFor="unlock_next_lesson">
+                        Unlock next lesson upon completion
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                {/* Section practice specific settings */}
+                {formData.type === 'section_practice' && (
+                  <>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="hints_enabled"
+                        checked={formData.settings.hints_enabled}
+                        onChange={(e) =>
+                          updateField('settings', {
+                            ...formData.settings,
+                            hints_enabled: e.target.checked,
+                          })
+                        }
+                        className="rounded border-gray-300"
+                      />
+                      <label className="text-sm" htmlFor="hints_enabled">
+                        Enable hints
+                      </label>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="practice_mode"
+                        checked={formData.settings.practice_mode}
+                        onChange={(e) =>
+                          updateField('settings', {
+                            ...formData.settings,
+                            practice_mode: e.target.checked,
+                          })
+                        }
+                        className="rounded border-gray-300"
+                      />
+                      <label className="text-sm" htmlFor="practice_mode">
+                        Practice mode (no penalties)
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Difficulty Level</label>
-            <select
-              className="w-full px-3 py-2 rounded-md border border-input bg-background"
-              value={formData.difficulty_level}
-              onChange={(e) => updateField('difficulty_level', e.target.value)}
-              required
-            >
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-              <option value="expert">Expert</option>
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="is_published"
-              checked={formData.is_published}
-              onChange={(e) => updateField('is_published', e.target.checked)}
-              className="rounded border-gray-300"
+          {/* Questions */}
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="font-medium">Questions</h3>
+            <QuestionFormSection
+              questions={formData.questions}
+              onQuestionsChange={handleQuestionsChange}
             />
-            <label className="text-sm font-medium" htmlFor="is_published">
-              Publish immediately
-            </label>
           </div>
         </div>
       </Card>
-
-      {/* Questions */}
-      <QuestionFormSection 
-        questions={formData.questions}
-        onQuestionsChange={(questions) => updateField('questions', questions)}
-      />
 
       {/* Actions */}
       <div className="flex justify-end space-x-2">
@@ -202,9 +338,9 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
         <Button type="submit" disabled={loading}>
           {loading
             ? 'Saving...'
-            : initialData?.id
-            ? 'Update Quiz'
-            : 'Create Quiz'}
+            : initialData
+            ? `Update ${formData.type === 'section_practice' ? 'Practice Quiz' : 'Lesson Quiz'}`
+            : `Create ${formData.type === 'section_practice' ? 'Practice Quiz' : 'Lesson Quiz'}`}
         </Button>
       </div>
 
@@ -217,6 +353,7 @@ export default function QuizForm({ lessonId, initialData }: QuizFormProps) {
           cancelText="Continue Editing"
           variant="destructive"
           onConfirm={() => router.back()}
+          onCancel={() => setShowDiscardWarning(false)}
         />
       )}
     </form>

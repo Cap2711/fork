@@ -1,8 +1,7 @@
 'use client';
 
-import * as React from 'react';
 import {
-  AlertDialog as BaseAlertDialog,
+  AlertDialog as AlertDialogComponent,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
@@ -12,53 +11,54 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
 
-interface AlertDialogProps {
+export interface AlertDialogProps {
   trigger: React.ReactNode;
   title: string;
   description: string;
-  onConfirm: () => void;
-  confirmText?: string;
-  cancelText?: string;
+  confirmText: string;
+  cancelText: string;
   variant?: 'default' | 'destructive';
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void;
 }
 
 export function AlertDialog({
   trigger,
   title,
   description,
-  onConfirm,
-  confirmText = 'Continue',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   variant = 'default',
+  onConfirm,
+  onCancel,
 }: AlertDialogProps) {
   return (
-    <BaseAlertDialog>
+    <AlertDialogComponent>
       <AlertDialogTrigger asChild>
         {trigger}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {description}
-          </AlertDialogDescription>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{cancelText}</AlertDialogCancel>
+          <AlertDialogCancel onClick={onCancel}>
+            {cancelText}
+          </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             className={
               variant === 'destructive'
-                ? 'bg-red-600 hover:bg-red-700 focus:ring-red-600'
-                : ''
+                ? 'bg-red-600 hover:bg-red-700'
+                : undefined
             }
           >
             {confirmText}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
-    </BaseAlertDialog>
+    </AlertDialogComponent>
   );
 }
