@@ -1,4 +1,5 @@
 import { Question } from '@/components/admin/questions/types';
+import { Quiz } from './quiz';
 
 export type SectionType = 'theory' | 'practice' | 'mini_quiz';
 
@@ -19,6 +20,12 @@ export interface TheoryContent {
   examples?: Example[];
 }
 
+export interface PracticeContent {
+  instructions: string;
+  questions: Question[];
+  settings: PracticeSettings;
+}
+
 export interface PracticeSettings {
   timeLimit?: number;
   maxAttempts?: number;
@@ -27,10 +34,9 @@ export interface PracticeSettings {
   passingScore?: number;
 }
 
-export interface PracticeContent {
-  instructions: string;
+export interface MiniQuizContent {
   questions: Question[];
-  settings: PracticeSettings;
+  settings: MiniQuizSettings;
 }
 
 export interface MiniQuizSettings {
@@ -39,20 +45,13 @@ export interface MiniQuizSettings {
   showExplanations: boolean;
 }
 
-export interface MiniQuizContent {
-  questions: Question[];
-  settings: MiniQuizSettings;
-}
-
 export type SectionContent = TheoryContent | PracticeContent | MiniQuizContent;
 
-// Base section interface as it exists in the database
-export interface Section {
+export interface SectionBase {
   id: number;
   lesson_id: number;
   title: string;
-  slug: string;
-  description: string | null;
+  description: string;
   type: SectionType;
   order: number;
   content: SectionContent;
@@ -77,40 +76,21 @@ export interface Section {
   updated_at: string;
 }
 
-// Form specific interface with required fields for the form
-export interface SectionFormData {
+// Extended Section interface that includes the quiz relationship
+export interface Section extends SectionBase {
+  quiz?: Quiz;
+}
+
+export interface SectionFormData extends Omit<SectionBase, 'id' | 'created_at' | 'updated_at'> {
   id?: number;
-  lesson_id: number;
-  title: string;
-  description: string; // Non-nullable in the form
-  type: SectionType;
-  order: number;
-  content: SectionContent;
-  practice_config: {
-    questions?: Question[];
-    instructions?: string;
-    settings?: {
-      timeLimit?: number;
-      maxAttempts?: number;
-      showHints?: boolean;
-    };
-  } | null;
-  requires_previous: boolean;
-  xp_reward: number;
-  estimated_time: number;
-  min_correct_required: number | null;
-  allow_retry: boolean;
-  show_solution: boolean;
-  is_published: boolean;
-  difficulty_level: string;
 }
 
 export const DEFAULT_SECTION_VALUES: SectionFormData = {
+  lesson_id: 0,
   title: '',
   description: '',
   type: 'theory',
   order: 0,
-  lesson_id: 0,
   content: {
     text: '',
     media: [],
@@ -127,15 +107,15 @@ export const DEFAULT_SECTION_VALUES: SectionFormData = {
   difficulty_level: 'beginner',
 };
 
-export const DEFAULT_PRACTICE_SETTINGS: PracticeSettings = {
-  showHints: true,
-  showFeedback: true,
-  maxAttempts: 3,
-  passingScore: 70,
-};
+// Helper type guard functions
+export function isTheoryContent(content: SectionContent): content is TheoryContent {
+  return 'text' in content;
+}
 
-export const DEFAULT_MINI_QUIZ_SETTINGS: MiniQuizSettings = {
-  passingScore: 70,
-  showExplanations: true,
-  timeLimit: 5,
-};
+export function isPracticeContent(content: SectionContent): content is PracticeContent {
+  return 'instructions' in content;
+}
+
+export function isMiniQuizContent(content: SectionContent): content is MiniQuizContent {
+  return !('text' in content) && !('instructions' in content);
+}

@@ -1,16 +1,27 @@
+'use client';
+
+import { createLesson } from '@/app/_actions/admin/lesson-actions';
 import LessonForm from '@/components/admin/forms/LessonForm';
 
-export default function NewLesson({ params }: { params: { unitId: string } }) {
+interface NewLessonPageProps {
+  params: {
+    unitId: string;
+  };
+}
+
+export default function NewLessonPage({ params }: NewLessonPageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Create Lesson</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Create New Lesson</h2>
         <p className="text-muted-foreground">
-          Add a new lesson to the unit
+          Add a new lesson to your unit
         </p>
       </div>
-
-      <LessonForm unitId={parseInt(params.unitId)} />
+      <LessonForm 
+        unitId={parseInt(params.unitId)}
+        onSubmit={createLesson}
+      />
     </div>
   );
 }

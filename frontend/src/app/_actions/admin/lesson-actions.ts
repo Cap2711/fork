@@ -1,298 +1,118 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import axiosInstance from '@/lib/axios';
-import { ApiResponse } from '@/lib/axios';
+import { Lesson } from '@/types/lesson';
+import { Section } from '@/types/section';
+import { Quiz } from '@/types/quiz';
 
-interface Lesson {
+interface APIResponse {
   id: number;
   unit_id: number;
   title: string;
   description: string;
-  content: string;
+  slug?: string;
   order: number;
-  estimated_duration: number;
-  difficulty_level: string;
   is_published: boolean;
-  has_quiz: boolean;
-  has_exercise: boolean;
-  has_vocabulary: boolean;
+  estimated_time?: number;
+  xp_reward?: number;
+  difficulty_level: string;
+  sections: Section[];
+  assessment_quiz?: Quiz;
   created_at: string;
   updated_at: string;
 }
 
-interface LessonContent {
-  id: number;
-  content_type: 'quiz' | 'exercise' | 'vocabulary';
-  content_id: number;
-  order: number;
-}
-
-interface ApiError {
-  message: string;
-  status: number;
-}
-
-function isAxiosError(error: unknown): error is { response?: { data?: ApiError } } {
-  return error != null && typeof error === 'object' && 'isAxiosError' in error;
-}
-
-export async function getLessons(unitId?: number) {
-  try {
-    const url = unitId 
-      ? `/admin/units/${unitId}/lessons`
-      : '/admin/lessons';
-    
-    const response = await axiosInstance.get<ApiResponse<Lesson[]>>(url);
-    return {
-      data: response.data.data,
-      error: null
-    };
-  } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        data: null,
-        error: error.response?.data?.message || 'Failed to fetch lessons'
-      };
-    }
-    return {
-      data: null,
-      error: 'An unexpected error occurred'
-    };
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error && 'message' in error) {
+    return String(error.message);
   }
+  return 'An unexpected error occurred';
 }
 
-export async function getLesson(id: number) {
-  try {
-    const response = await axiosInstance.get<ApiResponse<Lesson>>(`/admin/lessons/${id}`);
-    return {
-      data: response.data.data,
-      error: null
-    };
-  } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        data: null,
-        error: error.response?.data?.message || 'Failed to fetch lesson'
-      };
-    }
-    return {
-      data: null,
-      error: 'An unexpected error occurred'
-    };
-  }
+function transformAPIResponse(data: APIResponse): Lesson {
+  return {
+    ...data,
+    slug: data.slug || `lesson-${data.id}`,
+    estimated_time: data.estimated_time || 0,
+    xp_reward: data.xp_reward || 0,
+    sections: data.sections || [],
+    assessment_quiz: data.assessment_quiz
+  };
 }
 
-export async function getLessonContents(lessonId: number) {
+export async function createLesson(formData: FormData) {
   try {
-    const response = await axiosInstance.get<ApiResponse<LessonContent[]>>(`/admin/lessons/${lessonId}/contents`);
-    return {
-      data: response.data.data,
-      error: null
-    };
+    const response = await axiosInstance.post<APIResponse>('/api/admin/lessons', formData);
+    revalidatePath('/admin/units/[id]', 'page');
+    revalidatePath('/admin/lessons', 'page');
+    return { data: transformAPIResponse(response.data) };
   } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        data: null,
-        error: error.response?.data?.message || 'Failed to fetch lesson contents'
-      };
-    }
-    return {
-      data: null,
-      error: 'An unexpected error occurred'
-    };
-  }
-}
-
-export async function createLesson(unitId: number, formData: FormData) {
-  try {
-    const response = await axiosInstance.post<ApiResponse<Lesson>>(`/admin/units/${unitId}/lessons`, {
-      title: formData.get('title'),
-      description: formData.get('description'),
-      content: formData.get('content'),
-      order: formData.get('order'),
-      estimated_duration: formData.get('estimated_duration'),
-      difficulty_level: formData.get('difficulty_level'),
-      is_published: formData.get('is_published') === 'true'
-    });
-
-    return {
-      data: response.data.data,
-      error: null
-    };
-  } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        data: null,
-        error: error.response?.data?.message || 'Failed to create lesson'
-      };
-    }
-    return {
-      data: null,
-      error: 'An unexpected error occurred'
-    };
+    return { error: getErrorMessage(error) };
   }
 }
 
 export async function updateLesson(id: number, formData: FormData) {
   try {
-    const response = await axiosInstance.put<ApiResponse<Lesson>>(`/admin/lessons/${id}`, {
-      title: formData.get('title'),
-      description: formData.get('description'),
-      content: formData.get('content'),
-      order: formData.get('order'),
-      estimated_duration: formData.get('estimated_duration'),
-      difficulty_level: formData.get('difficulty_level'),
-      is_published: formData.get('is_published') === 'true'
-    });
-
-    return {
-      data: response.data.data,
-      error: null
-    };
+    const response = await axiosInstance.put<APIResponse>(`/api/admin/lessons/${id}`, formData);
+    revalidatePath('/admin/units/[id]', 'page');
+    revalidatePath('/admin/lessons/[id]', 'page');
+    return { data: transformAPIResponse(response.data) };
   } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        data: null,
-        error: error.response?.data?.message || 'Failed to update lesson'
-      };
-    }
-    return {
-      data: null,
-      error: 'An unexpected error occurred'
-    };
+    return { error: getErrorMessage(error) };
   }
 }
 
 export async function deleteLesson(id: number) {
   try {
-    await axiosInstance.delete<ApiResponse<void>>(`/admin/lessons/${id}`);
-    return { error: null };
+    await axiosInstance.delete(`/api/admin/lessons/${id}`);
+    revalidatePath('/admin/units/[id]', 'page');
+    revalidatePath('/admin/lessons', 'page');
+    return { success: true };
   } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        error: error.response?.data?.message || 'Failed to delete lesson'
-      };
-    }
-    return {
-      error: 'An unexpected error occurred'
-    };
+    return { error: getErrorMessage(error) };
   }
 }
 
-export async function toggleLessonStatus(id: number) {
+export async function getLesson(id: number) {
   try {
-    const response = await axiosInstance.post<ApiResponse<{ is_published: boolean }>>(`/admin/lessons/${id}/toggle-status`);
-    return {
-      data: response.data.data,
-      error: null
-    };
+    const response = await axiosInstance.get<APIResponse>(`/api/admin/lessons/${id}`);
+    return { data: transformAPIResponse(response.data) };
   } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        data: null,
-        error: error.response?.data?.message || 'Failed to toggle lesson status'
-      };
-    }
-    return {
-      data: null,
-      error: 'An unexpected error occurred'
-    };
+    return { error: getErrorMessage(error) };
   }
 }
 
-export async function reorderLessons(unitId: number, lessonOrders: { id: number; order: number }[]) {
+export async function getLessons(unitId?: number) {
   try {
-    const response = await axiosInstance.put<ApiResponse<{ success: boolean }>>(
-      `/admin/units/${unitId}/lessons/reorder`,
-      { lessons: lessonOrders }
-    );
-    return {
-      success: response.data.data.success,
-      error: null
-    };
+    const url = unitId 
+      ? `/api/admin/units/${unitId}/lessons`
+      : '/api/admin/lessons';
+    const response = await axiosInstance.get<APIResponse[]>(url);
+    return { data: response.data.map(transformAPIResponse) };
   } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to reorder lessons'
-      };
-    }
-    return {
-      success: false,
-      error: 'An unexpected error occurred'
-    };
+    return { error: getErrorMessage(error) };
   }
 }
 
-export async function attachContent(
-  lessonId: number, 
-  contentType: 'quiz' | 'exercise' | 'vocabulary',
-  contentId: number,
-  order: number
-) {
+export async function updateLessonOrder(id: number, order: number) {
   try {
-    const response = await axiosInstance.post<ApiResponse<LessonContent>>(
-      `/admin/lessons/${lessonId}/contents`,
-      {
-        content_type: contentType,
-        content_id: contentId,
-        order: order
-      }
-    );
-    return {
-      data: response.data.data,
-      error: null
-    };
+    const response = await axiosInstance.patch<APIResponse>(`/api/admin/lessons/${id}/order`, { order });
+    revalidatePath('/admin/units/[id]', 'page');
+    return { data: transformAPIResponse(response.data) };
   } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        data: null,
-        error: error.response?.data?.message || 'Failed to attach content to lesson'
-      };
-    }
-    return {
-      data: null,
-      error: 'An unexpected error occurred'
-    };
+    return { error: getErrorMessage(error) };
   }
 }
 
-export async function detachContent(lessonId: number, contentId: number) {
+export async function toggleLessonPublished(id: number) {
   try {
-    await axiosInstance.delete<ApiResponse<void>>(`/admin/lessons/${lessonId}/contents/${contentId}`);
-    return { error: null };
+    const response = await axiosInstance.patch<APIResponse>(`/api/admin/lessons/${id}/toggle-published`);
+    revalidatePath('/admin/units/[id]', 'page');
+    revalidatePath('/admin/lessons/[id]', 'page');
+    return { data: transformAPIResponse(response.data) };
   } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        error: error.response?.data?.message || 'Failed to detach content from lesson'
-      };
-    }
-    return {
-      error: 'An unexpected error occurred'
-    };
-  }
-}
-
-export async function reorderContents(lessonId: number, contentOrders: { id: number; order: number }[]) {
-  try {
-    const response = await axiosInstance.put<ApiResponse<{ success: boolean }>>(
-      `/admin/lessons/${lessonId}/contents/reorder`,
-      { contents: contentOrders }
-    );
-    return {
-      success: response.data.data.success,
-      error: null
-    };
-  } catch (error) {
-    if (isAxiosError(error)) {
-      return {
-        success: false,
-        error: error.response?.data?.message || 'Failed to reorder lesson contents'
-      };
-    }
-    return {
-      success: false,
-      error: 'An unexpected error occurred'
-    };
+    return { error: getErrorMessage(error) };
   }
 }

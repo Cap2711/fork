@@ -1,88 +1,59 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createLesson, updateLesson } from '@/app/_actions/admin/lesson-actions';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
 import { AlertDialog } from '@/components/admin/AlertDialog';
+import { toast } from 'sonner';
+import { LessonFormData } from '@/types/lesson';
 
 interface LessonFormProps {
-  unitId?: number;
-  initialData?: {
-    id?: number;
-    title: string;
-    description: string;
-    content: string;
-    order: number;
-    difficulty_level: string;
-    estimated_duration: number;
-    is_published: boolean;
-  };
-  onSuccess?: () => void;
+  unitId: number;
+  initialData?: LessonFormData;
+  onSubmit: (data: FormData) => Promise<{ error?: string }>;
 }
 
-export default function LessonForm({ unitId, initialData, onSuccess }: LessonFormProps) {
+export default function LessonForm({
+  unitId,
+  initialData,
+  onSubmit,
+}: LessonFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showDiscardWarning, setShowDiscardWarning] = useState(false);
 
-  const [formData, setFormData] = useState({
-    title: initialData?.title || '',
-    description: initialData?.description || '',
-    content: initialData?.content || '',
-    order: initialData?.order || 0,
-    difficulty_level: initialData?.difficulty_level || 'beginner',
-    estimated_duration: initialData?.estimated_duration || 0,
-    is_published: initialData?.is_published || false,
-  });
-
-  const updateField = (field: string, value: string | number | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    setHasUnsavedChanges(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-
-    const form = new FormData();
-    form.append('title', formData.title);
-    form.append('description', formData.description);
-    form.append('content', formData.content);
-    form.append('order', formData.order.toString());
-    form.append('difficulty_level', formData.difficulty_level);
-    form.append('estimated_duration', formData.estimated_duration.toString());
-    form.append('is_published', formData.is_published.toString());
 
     try {
-      if (initialData?.id) {
-        const result = await updateLesson(initialData.id, form);
-        if (result.error) {
-          setError(result.error);
-        } else {
-          setHasUnsavedChanges(false);
-          onSuccess?.();
-          router.push(`/admin/units/${unitId}/view`);
-          router.refresh();
-        }
-      } else if (unitId) {
-        const result = await createLesson(unitId, form);
-        if (result.error) {
-          setError(result.error);
-        } else {
-          setHasUnsavedChanges(false);
-          onSuccess?.();
-          router.push(`/admin/units/${unitId}/view`);
-          router.refresh();
-        }
+      const form = new FormData(e.currentTarget);
+      form.append('unit_id', unitId.toString());
+      
+      const isPublished = form.get('is_published') === 'on';
+      form.set('is_published', isPublished.toString());
+
+      const result = await onSubmit(form);
+
+      if (result.error) {
+        toast.error('Error', {
+          description: result.error,
+        });
+      } else {
+        toast.success('Success', {
+          description: `Lesson ${initialData ? 'updated' : 'created'} successfully`,
+        });
+        setHasUnsavedChanges(false);
+        router.refresh();
+        router.push(`/admin/units/${unitId}/view`);
       }
     } catch {
-      setError('An unexpected error occurred');
+      toast.error('Error', {
+        description: 'An unexpected error occurred',
+      });
     } finally {
       setLoading(false);
     }
@@ -96,104 +67,84 @@ export default function LessonForm({ unitId, initialData, onSuccess }: LessonFor
     }
   };
 
-  const difficultyLevels = ['beginner', 'intermediate', 'advanced', 'expert'];
+  const handleFieldChange = () => {
+    setHasUnsavedChanges(true);
+  };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} onChange={handleFieldChange}>
       <Card className="p-6 space-y-4">
-        {error && (
-          <div className="text-red-500 p-4 rounded-md bg-red-50 mb-4">
-            {error}
-          </div>
-        )}
-
         <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="title">
-            Title
-          </label>
+          <label className="text-sm font-medium" htmlFor="title">Title</label>
           <Input
             id="title"
-            value={formData.title}
-            onChange={(e) => updateField('title', e.target.value)}
+            name="title"
+            defaultValue={initialData?.title}
             required
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="description">
-            Description
-          </label>
+          <label className="text-sm font-medium" htmlFor="description">Description</label>
           <textarea
             id="description"
+            name="description"
             className="w-full min-h-[100px] px-3 py-2 rounded-md border border-input bg-background"
-            value={formData.description}
-            onChange={(e) => updateField('description', e.target.value)}
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="content">
-            Content
-          </label>
-          <textarea
-            id="content"
-            className="w-full min-h-[200px] px-3 py-2 rounded-md border border-input bg-background"
-            value={formData.content}
-            onChange={(e) => updateField('content', e.target.value)}
+            defaultValue={initialData?.description}
             required
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="difficulty_level">
-              Difficulty Level
-            </label>
-            <select
-              id="difficulty_level"
-              className="w-full px-3 py-2 rounded-md border border-input bg-background"
-              value={formData.difficulty_level}
-              onChange={(e) => updateField('difficulty_level', e.target.value)}
+            <label className="text-sm font-medium" htmlFor="estimated_time">Estimated Time (minutes)</label>
+            <Input
+              id="estimated_time"
+              type="number"
+              name="estimated_time"
+              defaultValue={initialData?.estimated_time || 10}
+              min="1"
               required
-            >
-              {difficultyLevels.map((level) => (
-                <option key={level} value={level}>
-                  {level.charAt(0).toUpperCase() + level.slice(1)}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="order">
-              Order
-            </label>
+            <label className="text-sm font-medium" htmlFor="xp_reward">XP Reward</label>
+            <Input
+              id="xp_reward"
+              type="number"
+              name="xp_reward"
+              defaultValue={initialData?.xp_reward || 10}
+              min="0"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="order">Order</label>
             <Input
               id="order"
               type="number"
+              name="order"
+              defaultValue={initialData?.order || 0}
               min="0"
-              value={formData.order}
-              onChange={(e) => updateField('order', parseInt(e.target.value) || 0)}
               required
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="estimated_duration">
-              Estimated Duration (hours)
-            </label>
-            <Input
-              id="estimated_duration"
-              type="number"
-              min="0"
-              step="0.5"
-              value={formData.estimated_duration}
-              onChange={(e) =>
-                updateField('estimated_duration', parseFloat(e.target.value) || 0)
-              }
+            <label className="text-sm font-medium" htmlFor="difficulty_level">Difficulty Level</label>
+            <select
+              id="difficulty_level"
+              name="difficulty_level"
+              defaultValue={initialData?.difficulty_level || 'beginner'}
+              className="w-full px-3 py-2 rounded-md border border-input bg-background"
               required
-            />
+            >
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
           </div>
         </div>
 
@@ -201,33 +152,31 @@ export default function LessonForm({ unitId, initialData, onSuccess }: LessonFor
           <input
             type="checkbox"
             id="is_published"
-            checked={formData.is_published}
-            onChange={(e) => updateField('is_published', e.target.checked)}
-            className="rounded border-gray-300"
+            name="is_published"
+            defaultChecked={initialData?.is_published}
+            className="h-4 w-4 rounded border-gray-300"
           />
-          <label className="text-sm font-medium" htmlFor="is_published">
-            Publish immediately
-          </label>
-        </div>
-
-        <div className="flex justify-end space-x-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleCancel}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading
-              ? 'Saving...'
-              : initialData?.id
-              ? 'Update Lesson'
-              : 'Create Lesson'}
-          </Button>
+          <label className="text-sm font-medium" htmlFor="is_published">Published</label>
         </div>
       </Card>
+
+      <div className="mt-6 flex justify-end space-x-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleCancel}
+          disabled={loading}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={loading}>
+          {loading
+            ? 'Saving...'
+            : initialData
+            ? 'Update Lesson'
+            : 'Create Lesson'}
+        </Button>
+      </div>
 
       {showDiscardWarning && (
         <AlertDialog
@@ -238,6 +187,7 @@ export default function LessonForm({ unitId, initialData, onSuccess }: LessonFor
           cancelText="Continue Editing"
           variant="destructive"
           onConfirm={() => router.back()}
+          onCancel={() => setShowDiscardWarning(false)}
         />
       )}
     </form>

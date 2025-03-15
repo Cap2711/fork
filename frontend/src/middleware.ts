@@ -1,86 +1,70 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { UserRole } from "@/types/user";
+import { type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { UserRole } from './types/user';
 
 export async function middleware(request: NextRequest) {
-  const token = request.cookies.get("token")?.value;
-  const userDataCookie = request.cookies.get("user_data")?.value;
-
-  // For login and register pages, redirect authenticated users
+  // Skip middleware for API routes and static files
   if (
-    request.nextUrl.pathname === "/login" ||
-    request.nextUrl.pathname === "/register"
+    request.nextUrl.pathname.startsWith('/api') ||
+    request.nextUrl.pathname.startsWith('/_next') ||
+    request.nextUrl.pathname.includes('.')
   ) {
-    if (token && userDataCookie) {
-      try {
-        const userData = JSON.parse(decodeURIComponent(userDataCookie));
-        const role = userData.role;
-
-        // Redirect to appropriate dashboard based on role
-        return NextResponse.redirect(
-          new URL(role === UserRole.ADMIN ? "/admin" : "/learn", request.url)
-        );
-      } catch (error) {
-        console.error("Error parsing user data:", error);
-      }
-    }
+    return NextResponse.next();
   }
 
-  // Check if trying to access dashboard routes
-  if (
-    request.nextUrl.pathname.startsWith("/admin") ||
-    request.nextUrl.pathname.startsWith("/learn")
-  ) {
-    console.log("TOKEN FROM COOKIE: ", token);
-    console.log("USER DATA FROM COOKIE: ", userDataCookie);
+  try {
+    // Check if user is authenticated
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
+      headers: {
+        Cookie: request.headers.get('cookie') || '',
+      },
+    });
 
-    // If no token or user data, redirect to login
-    if (!token || !userDataCookie) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    let role: UserRole | null = null;
-    try {
-      const userData = JSON.parse(decodeURIComponent(userDataCookie));
-      role = userData.role;
-    } catch (error) {
-      console.error("Error parsing user data:", error);
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    // If no role is found, redirect to login
-    if (!role) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-
-    // Check if user is trying to access admin routes
-    if (request.nextUrl.pathname.startsWith("/admin")) {
-      if (role !== UserRole.ADMIN) {
-        // Redirect non-admin users to learn dashboard
-        return NextResponse.redirect(new URL("/learn", request.url));
+    if (!response.ok) {
+      // Redirect to login if not authenticated
+      if (request.nextUrl.pathname.startsWith('/admin')) {
+        return NextResponse.redirect(new URL('/login', request.url));
       }
+      return NextResponse.next();
     }
 
-    // Check if user is trying to access learn routes
-    if (request.nextUrl.pathname.startsWith("/learn")) {
-      if (role === UserRole.ADMIN) {
-        // Redirect admin users to admin dashboard
-        return NextResponse.redirect(new URL("/admin", request.url));
+    const data = await response.json();
+    const userRole = data.user?.role;
+
+    // Protect admin routes
+    if (request.nextUrl.pathname.startsWith('/admin')) {
+      if (userRole !== UserRole.ADMIN) {
+        // Redirect non-admin users to home page
+        return NextResponse.redirect(new URL('/', request.url));
       }
+      return NextResponse.next();
     }
+
+    // Handle authenticated user routes
+    if (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register') {
+      // Redirect authenticated users to their appropriate dashboard
+      const redirectTo = userRole === UserRole.ADMIN ? '/admin' : '/learn';
+      return NextResponse.redirect(new URL(redirectTo, request.url));
+    }
+
+    return NextResponse.next();
+  } catch (error) {
+    console.error('Middleware Error:', error);
+    return NextResponse.next();
   }
-
-  // Allow all other routes to pass through
-  return NextResponse.next();
 }
 
-// Configure the middleware to run on specific paths
+// Configure middleware to run on specific paths
 export const config = {
   matcher: [
-    // Match all dashboard routes
-    "/admin/:path*",
-    "/learn/:path*",
-    "/login",
-    "/register",
+    /*
+     * Match all request paths except:
+     * 1. /api routes
+     * 2. /_next (Next.js internals)
+     * 3. /_static (static files)
+     * 4. /images (static images)
+     * 5. /favicon.ico, /sitemap.xml (static files)
+     */
+    '/((?!api|_next|_static|images|favicon.ico|sitemap.xml).*)',
   ],
 };

@@ -1,4 +1,5 @@
 import { Section } from './section';
+import { Quiz } from './quiz';
 
 export interface Lesson {
   id: number;
@@ -12,19 +13,7 @@ export interface Lesson {
   xp_reward: number;
   difficulty_level: string;
   sections: Section[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface LessonResponse {
-  id: number;
-  unit_id: number;
-  title: string;
-  description: string;
-  order: number;
-  is_published: boolean;
-  difficulty_level: string;
-  sections?: Section[];
+  assessment_quiz?: Quiz;
   created_at: string;
   updated_at: string;
 }
@@ -51,3 +40,13 @@ export const DEFAULT_LESSON_VALUES: LessonFormData = {
   xp_reward: 10,
   difficulty_level: 'beginner',
 };
+
+// Type guard to check if a section has a quiz
+export function hasQuiz(section: Section): boolean {
+  return !!section.quiz;
+}
+
+// Helper function to check if a lesson has an assessment quiz
+export function hasAssessmentQuiz(lesson: Lesson): boolean {
+  return !!lesson.assessment_quiz;
+}

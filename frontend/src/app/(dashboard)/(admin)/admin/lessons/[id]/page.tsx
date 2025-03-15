@@ -1,23 +1,20 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getLesson, updateLesson } from '@/app/_actions/admin/lesson-actions';
 import LessonForm from '@/components/admin/forms/LessonForm';
-import { getLesson } from '@/app/_actions/admin/lesson-actions';
-import { useEffect, useState } from 'react';
+import { LessonFormData } from '@/types/lesson';
 
-interface Lesson {
-  id: number;
-  unit_id: number;
-  title: string;
-  description: string;
-  content: string;
-  order: number;
-  difficulty_level: string;
-  estimated_duration: number;
-  is_published: boolean;
+interface EditLessonPageProps {
+  params: {
+    id: string;
+  };
 }
 
-export default function EditLesson({ params }: { params: { id: string } }) {
-  const [lesson, setLesson] = useState<Lesson | null>(null);
+export default function EditLessonPage({ params }: EditLessonPageProps) {
+  const router = useRouter();
+  const [lesson, setLesson] = useState<LessonFormData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,8 +23,19 @@ export default function EditLesson({ params }: { params: { id: string } }) {
       const result = await getLesson(parseInt(params.id));
       if (result.error) {
         setError(result.error);
-      } else {
-        setLesson(result.data);
+      } else if (result.data) {
+        const formData: LessonFormData = {
+          id: result.data.id,
+          unit_id: result.data.unit_id,
+          title: result.data.title,
+          description: result.data.description,
+          order: result.data.order,
+          is_published: result.data.is_published,
+          estimated_time: result.data.estimated_time,
+          xp_reward: result.data.xp_reward,
+          difficulty_level: result.data.difficulty_level
+        };
+        setLesson(formData);
       }
       setLoading(false);
     };
@@ -36,21 +44,30 @@ export default function EditLesson({ params }: { params: { id: string } }) {
   }, [params.id]);
 
   if (loading) {
-    return <div className="flex justify-center items-center h-48">Loading...</div>;
-  }
-
-  if (error) {
     return (
-      <div className="text-red-500 p-4 rounded-md bg-red-50 mb-4">
-        Error: {error}
+      <div className="flex h-[50vh] items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+          <p className="text-muted-foreground">Loading lesson...</p>
+        </div>
       </div>
     );
   }
 
-  if (!lesson) {
+  if (error || !lesson) {
     return (
-      <div className="text-red-500 p-4 rounded-md bg-red-50 mb-4">
-        Lesson not found
+      <div className="flex h-[50vh] items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="text-red-500 p-4 rounded-md bg-red-50 inline-block">
+            {error || 'Lesson not found'}
+          </div>
+          <button
+            onClick={() => router.back()}
+            className="text-primary hover:underline"
+          >
+            Go back
+          </button>
+        </div>
       </div>
     );
   }
@@ -60,21 +77,19 @@ export default function EditLesson({ params }: { params: { id: string } }) {
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Edit Lesson</h2>
         <p className="text-muted-foreground">
-          Update the details of your lesson
+          Make changes to your lesson
         </p>
       </div>
 
       <LessonForm
         unitId={lesson.unit_id}
-        initialData={{
-          id: lesson.id,
-          title: lesson.title,
-          description: lesson.description,
-          content: lesson.content,
-          order: lesson.order,
-          difficulty_level: lesson.difficulty_level,
-          estimated_duration: lesson.estimated_duration,
-          is_published: lesson.is_published,
+        initialData={lesson}
+        onSubmit={async (formData) => {
+          const result = await updateLesson(lesson.id!, formData);
+          if (result.error) {
+            return { error: result.error };
+          }
+          return {};
         }}
       />
     </div>

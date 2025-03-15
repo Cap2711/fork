@@ -7,8 +7,8 @@ import { Card } from '@/components/ui/card';
 import { AlertDialog } from '@/components/admin/AlertDialog';
 import { getLesson } from '@/app/_actions/admin/lesson-actions';
 import { deleteSection, updateSectionOrder, toggleSectionPublished } from '@/app/_actions/admin/section-actions';
-import { Section } from '@/types/section';
-import { Lesson, LessonResponse } from '@/types/lesson';
+import { SectionType } from '@/types/section';
+import { Lesson, hasAssessmentQuiz } from '@/types/lesson';
 
 interface ViewLessonPageProps {
   params: {
@@ -16,11 +16,11 @@ interface ViewLessonPageProps {
   };
 }
 
-const sectionTypes = {
+const sectionTypeIcons: Record<SectionType, { icon: string; label: string }> = {
   theory: { icon: '📚', label: 'Theory' },
   practice: { icon: '✏️', label: 'Practice Exercise' },
   mini_quiz: { icon: '🎯', label: 'Mini Quiz' },
-} as const;
+};
 
 export default function ViewLessonPage({ params }: ViewLessonPageProps) {
   const router = useRouter();
@@ -35,16 +35,7 @@ export default function ViewLessonPage({ params }: ViewLessonPageProps) {
       if (result.error) {
         setError(result.error);
       } else if (result.data) {
-        const response = result.data as LessonResponse;
-        // Transform response to match Lesson interface
-        const lessonData: Lesson = {
-          ...response,
-          sections: response.sections || [],
-          estimated_time: 10, // Default values since they're not in API response
-          xp_reward: 10,
-          slug: response.id.toString(), // Generate slug from ID if not provided
-        };
-        setLesson(lessonData);
+        setLesson(result.data);
       }
       setLoading(false);
     };
@@ -70,9 +61,9 @@ export default function ViewLessonPage({ params }: ViewLessonPageProps) {
     router.refresh();
   };
 
-  const getSectionLabel = (section: Section) => {
-    const typeInfo = sectionTypes[section.type as keyof typeof sectionTypes];
-    return `${typeInfo.icon} ${typeInfo.label}`;
+  const getSectionLabel = (type: SectionType) => {
+    const info = sectionTypeIcons[type];
+    return `${info.icon} ${info.label}`;
   };
 
   if (loading) {
@@ -112,11 +103,20 @@ export default function ViewLessonPage({ params }: ViewLessonPageProps) {
           <h1 className="text-3xl font-bold tracking-tight">{lesson.title}</h1>
           <p className="text-muted-foreground">{lesson.description}</p>
         </div>
-        <Button
-          onClick={() => router.push(`/admin/lessons/${params.id}/sections/new`)}
-        >
-          Add Section
-        </Button>
+        <div className="flex gap-2">
+          {!hasAssessmentQuiz(lesson) && (
+            <Button
+              onClick={() => router.push(`/admin/lessons/${params.id}/quizzes/new`)}
+            >
+              Add Assessment Quiz
+            </Button>
+          )}
+          <Button
+            onClick={() => router.push(`/admin/lessons/${params.id}/sections/new`)}
+          >
+            Add Section
+          </Button>
+        </div>
       </div>
 
       {/* Sections List */}
@@ -146,11 +146,24 @@ export default function ViewLessonPage({ params }: ViewLessonPageProps) {
                         {section.title}
                       </span>
                       <span className="text-sm text-muted-foreground">
-                        {getSectionLabel(section)}
+                        {getSectionLabel(section.type)}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {section.type === 'theory' && !section.quiz && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          router.push(
+                            `/admin/lessons/${params.id}/sections/${section.id}/quizzes/new`
+                          )
+                        }
+                      >
+                        Add Practice Quiz
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

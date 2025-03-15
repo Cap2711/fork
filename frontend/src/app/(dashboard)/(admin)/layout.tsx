@@ -4,38 +4,31 @@ import { useState } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminTopbar from '@/components/admin/AdminTopbar';
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function AdminLayout({ children }: AdminLayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <AdminSidebar 
-        isOpen={isSidebarOpen} 
-        isCollapsed={isSidebarCollapsed}
-        onClose={() => setIsSidebarOpen(false)} 
-      />
-
-      {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col min-h-screen transition-[margin] duration-200 ease-in-out ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
-        {/* Top Navigation */}
-        <AdminTopbar onMenuClick={() => setIsSidebarOpen(true)} />
-
-        {/* Collapse Button */}
-        <button 
-          className="p-2 bg-gray-200 rounded-full lg:hidden"
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        >
-          {isSidebarCollapsed ? 'Expand' : 'Collapse'}
-        </button>
-
-        {/* Main Content */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto w-full">
-            {children}
-          </div>
-        </main>
+    <div className="min-h-screen">
+      <div className="fixed inset-y-0 z-50 hidden h-full w-72 flex-col md:flex">
+        <AdminSidebar />
+      </div>
+      <div
+        className={`fixed top-0 z-50 w-full flex-col md:pl-72 ${
+          isSidebarCollapsed ? 'md:pl-20' : 'md:pl-72'
+        }`}
+      >
+        <AdminTopbar onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
+      </div>
+      <div
+        className={`pb-20 pt-16 min-h-screen ${
+          isSidebarCollapsed ? 'md:pl-20' : 'md:pl-72'
+        }`}
+      >
+        <div className="container py-6">{children}</div>
       </div>
     </div>
   );

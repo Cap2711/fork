@@ -1,97 +1,80 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { Menu, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { logout } from '@/app/_actions/auth-actions';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
-import Link from 'next/link';
-import { logout } from '@/app/_actions/auth-actions';
 
 interface AdminTopbarProps {
-  onMenuClick: () => void;
+  onSidebarToggle?: () => void;
 }
 
-export default function AdminTopbar({ onMenuClick }: AdminTopbarProps) {
-  return (
-    <div className="sticky top-0 z-20 bg-white border-b shadow-sm">
-      <div className="px-4 h-16 flex items-center justify-between gap-4">
-        {/* Left section with menu button */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onMenuClick}
-            className="lg:hidden -ml-2 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md"
-            aria-label="Open menu"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-          </button>
+export default function AdminTopbar({ onSidebarToggle }: AdminTopbarProps) {
+  const router = useRouter();
+  const [isMounted, setIsMounted] = useState(false);
 
-          {/* Mobile Logo */}
-          <div className="lg:hidden">
-            <Link href="/admin" className="font-semibold text-lg">
-              Admin
-            </Link>
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const handleLogout = async () => {
+    const result = await logout();
+    if (!result.error) {
+      router.push('/login');
+    }
+  };
+
+  if (!isMounted) {
+    return null;
+  }
+
+  return (
+    <div className="h-[64px] border-b bg-white">
+      <div className="flex h-full items-center justify-between px-4">
+        <div className="flex items-center gap-x-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+            onClick={onSidebarToggle}
+          >
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Toggle sidebar</span>
+          </Button>
+          <div className="hidden md:block">
+            <span className="text-xl font-bold">Admin Dashboard</span>
           </div>
         </div>
-
-        {/* Right section */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-x-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                className="hover:bg-gray-100 rounded-full w-10 h-10"
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2"
+                size="sm"
               >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </svg>
+                <User className="h-5 w-5" />
+                <span className="hidden md:inline">Account</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/admin/profile" className="cursor-pointer">
-                  Profile
-                </Link>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuItem onClick={() => router.push('/admin/profile')}>
+                Profile Settings
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/admin/settings" className="cursor-pointer">
-                  Settings
-                </Link>
+              <DropdownMenuItem onClick={() => router.push('/admin/users')}>
+                User Management
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-red-600 focus:text-red-600 cursor-pointer"
-                onClick={() => logout()}
-              >
+              <DropdownMenuItem onClick={() => router.push('/admin/settings')}>
+                System Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                 Logout
               </DropdownMenuItem>
             </DropdownMenuContent>
