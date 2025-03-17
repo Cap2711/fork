@@ -1,4 +1,5 @@
 import { ActivityFilter, ActivityResponse } from '@/types/activity';
+import { AuditStatistics, APIResponse, PaginatedResponse } from '@/types/audit';
 import axios from '@/lib/axios';
 
 export async function getActivities(
@@ -6,7 +7,7 @@ export async function getActivities(
   perPage: number,
   filter?: ActivityFilter
 ) {
-  const response = await axios.post<ActivityResponse>('/api/admin/audit-logs', {
+  const response = await axios.post<PaginatedResponse<ActivityResponse>>('/api/admin/audit-logs', {
     page,
     per_page: perPage,
     start_date: filter?.date_from,
@@ -19,11 +20,17 @@ export async function getActivities(
     sort_order: 'desc'
   });
 
-  return response.data;
+  return {
+    items: response.data.data,
+    total: response.data.meta.total,
+    page: response.data.meta.current_page,
+    per_page: response.data.meta.per_page,
+    has_more: response.data.meta.current_page < response.data.meta.last_page
+  };
 }
 
-export async function exportActivities(filter?: ActivityFilter) {
-  const response = await axios.post('/api/admin/audit-logs/export', {
+export async function exportActivities(filter?: ActivityFilter): Promise<Blob> {
+  const response = await axios.post<Blob>('/api/admin/audit-logs/export', {
     start_date: filter?.date_from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
     end_date: filter?.date_to || new Date().toISOString(),
     action: filter?.action?.[0],
@@ -37,8 +44,11 @@ export async function exportActivities(filter?: ActivityFilter) {
   return response.data;
 }
 
-export async function getActivityStatistics(startDate?: string, endDate?: string) {
-  const response = await axios.get('/api/admin/audit-logs/statistics', {
+export async function getActivityStatistics(
+  startDate?: string,
+  endDate?: string
+): Promise<AuditStatistics> {
+  const response = await axios.get<APIResponse<AuditStatistics>>('/api/admin/audit-logs/statistics', {
     params: {
       start_date: startDate,
       end_date: endDate
@@ -48,15 +58,28 @@ export async function getActivityStatistics(startDate?: string, endDate?: string
   return response.data.data;
 }
 
-export async function getUserActivity(userId: number, page = 1, perPage = 15) {
-  const response = await axios.get(`/api/admin/audit-logs/users/${userId}`, {
-    params: {
-      page,
-      per_page: perPage
+export async function getUserActivity(
+  userId: number,
+  page = 1,
+  perPage = 15
+) {
+  const response = await axios.get<PaginatedResponse<ActivityResponse>>(
+    `/api/admin/audit-logs/users/${userId}`,
+    {
+      params: {
+        page,
+        per_page: perPage
+      }
     }
-  });
+  );
 
-  return response.data;
+  return {
+    items: response.data.data,
+    total: response.data.meta.total,
+    page: response.data.meta.current_page,
+    per_page: response.data.meta.per_page,
+    has_more: response.data.meta.current_page < response.data.meta.last_page
+  };
 }
 
 export async function getContentHistory(
@@ -65,7 +88,7 @@ export async function getContentHistory(
   page = 1,
   perPage = 15
 ) {
-  const response = await axios.get(
+  const response = await axios.get<PaginatedResponse<ActivityResponse>>(
     `/api/admin/audit-logs/content/${contentType}/${contentId}`,
     {
       params: {
@@ -75,5 +98,11 @@ export async function getContentHistory(
     }
   );
 
-  return response.data;
+  return {
+    items: response.data.data,
+    total: response.data.meta.total,
+    page: response.data.meta.current_page,
+    per_page: response.data.meta.per_page,
+    has_more: response.data.meta.current_page < response.data.meta.last_page
+  };
 }
