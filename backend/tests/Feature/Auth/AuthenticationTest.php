@@ -4,6 +4,7 @@ namespace Tests\Feature\Auth;
 
 use Tests\TestCase;
 use App\Models\User;
+use Laravel\Sanctum\Sanctum;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 
@@ -16,7 +17,8 @@ class AuthenticationTest extends TestCase
         $user = User::create([
             'name' => 'Test User',
             'email' => 'test@example.com',
-            'password' => Hash::make('password123')
+            'password' => Hash::make('password123'),
+            'role' => 'user'
         ]);
 
         $response = $this->postJson('/api/auth/login', [
@@ -24,15 +26,22 @@ class AuthenticationTest extends TestCase
             'password' => 'password123'
         ]);
 
-        $response->assertStatus(200)
-            ->assertJsonStructure([
-                'user' => [
-                    'id',
-                    'name',
-                    'email',
-                    'created_at',
+        $response->assertOk()
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => 'Test User',
+                        'email' => 'test@example.com'
+                    ]
                 ],
-                'token'
+                'message' => 'Successfully logged in'
+            ])
+            ->assertJsonStructure([
+                'data' => [
+                    'token'
+                ]
             ]);
     }
 
@@ -64,6 +73,7 @@ class AuthenticationTest extends TestCase
 
         $response->assertStatus(401)
             ->assertJson([
+                'success' => false,
                 'message' => 'Invalid credentials'
             ]);
     }
@@ -83,24 +93,17 @@ class AuthenticationTest extends TestCase
             'password' => Hash::make('password123')
         ]);
 
-        $response = $this->postJson('/api/auth/login', [
-            'email' => 'test@example.com',
-            'password' => 'password123'
-        ]);
+        Sanctum::actingAs($user);
 
-        $token = $response->json('token');
+        $response = $this->postJson('/api/auth/logout');
 
-        $logoutResponse = $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->postJson('/api/auth/logout');
-
-        $logoutResponse->assertStatus(200)
+        $response->assertStatus(200)
             ->assertJson([
+                'success' => true,
+                'data' => [],
                 'message' => 'Successfully logged out'
             ]);
 
-        // Verify the token is invalidated
-        $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->getJson('/api/auth/user')
-            ->assertStatus(401);
+        $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 }

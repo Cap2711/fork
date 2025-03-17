@@ -19,7 +19,7 @@ class LoginController extends BaseAPIController
         ]);
 
         if (!Auth::attempt($request->only('email', 'password'))) {
-            return $this->sendError('Invalid credentials', ['email' => 'The provided credentials are incorrect.']);
+            return $this->sendUnauthorizedResponse('Invalid credentials');
         }
 
         $user = User::where('email', $request->email)->firstOrFail();

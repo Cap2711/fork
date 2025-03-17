@@ -20,7 +20,6 @@ use App\Http\Controllers\API\Admin\{
     AdminQuizQuestionController,
     AdminVocabularyController,
     AdminGuideBookEntryController,
-    AdminContentController,
     AdminProgressController
 };
 
@@ -74,14 +73,6 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(functi
         Route::post('{section}/reject-review', [AdminSectionController::class, 'rejectReview']);
         Route::patch('{section}/status', [AdminSectionController::class, 'updateStatus']);
         Route::post('{section}/reorder-exercises', [AdminSectionController::class, 'reorderExercises']);
-    });
-
-    // Content Version Management
-    Route::prefix('content')->group(function () {
-        Route::post('{type}/{id}/publish', [AdminContentController::class, 'publish']);
-        Route::post('{type}/{id}/unpublish', [AdminContentController::class, 'unpublish']);
-        Route::get('{type}/{id}/versions', [AdminContentController::class, 'versions']);
-        Route::post('{type}/{id}/restore/{version}', [AdminContentController::class, 'restore']);
     });
 
     // Progress Management
