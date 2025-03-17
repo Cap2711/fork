@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\API\Admin\{
@@ -7,7 +8,8 @@ use App\Http\Controllers\API\Admin\{
     AdminMediaController,
     AdminAuditController,
     AdminAnalyticsController,
-    AdminRoleController
+    AdminRoleController,
+    AdminGamificationController
 };
 
 use App\Http\Controllers\API\Admin\{
@@ -73,6 +75,31 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(functi
         Route::post('{section}/reject-review', [AdminSectionController::class, 'rejectReview']);
         Route::patch('{section}/status', [AdminSectionController::class, 'updateStatus']);
         Route::post('{section}/reorder-exercises', [AdminSectionController::class, 'reorderExercises']);
+    });
+
+    // Gamification Management
+    Route::prefix('gamification')->group(function () {
+        // Achievements
+        Route::post('achievements', [AdminGamificationController::class, 'createAchievement']);
+        Route::put('achievements/{achievement}', [AdminGamificationController::class, 'updateAchievement']);
+
+        // XP Rules
+        Route::post('xp-rules', [AdminGamificationController::class, 'configureXpRules']);
+        
+        // Leagues
+        Route::post('leagues', [AdminGamificationController::class, 'configureLeagues']);
+        
+        // Streak Rules
+        Route::post('streak-rules', [AdminGamificationController::class, 'configureStreakRules']);
+        
+        // Daily Goals
+        Route::post('daily-goals', [AdminGamificationController::class, 'configureDailyGoals']);
+        
+        // Bonus Events
+        Route::post('bonus-events', [AdminGamificationController::class, 'createBonusEvent']);
+
+        // Statistics
+        Route::get('statistics', [AdminGamificationController::class, 'getStatistics']);
     });
 
     // Progress Management
