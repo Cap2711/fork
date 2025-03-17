@@ -27,13 +27,16 @@ class Exercise extends Model
         'type',
         'content',
         'answers',
-        'order'
+        'order',
+        'status',
+        'review_status'
     ];
 
     protected $casts = [
         'content' => 'array',
         'answers' => 'array',
-        'order' => 'integer'
+        'order' => 'integer',  'status' => 'string',
+        'review_status' => 'string'
     ];
 
     /**

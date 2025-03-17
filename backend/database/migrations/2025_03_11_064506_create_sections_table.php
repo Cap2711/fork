@@ -21,6 +21,8 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->string('type')->default('theory'); // theory, practice, or mini_quiz
             $table->integer('order')->default(0);
+            $table->enum('status', ['draft', 'published', 'archived'])->default('draft');
+
             
             // Content and configuration
             $table->json('content')->nullable(); // For theory/example content

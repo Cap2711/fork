@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('title');
             $table->text('description');
             $table->integer('order');
+            $table->enum('status', ['draft', 'published', 'archived'])->default('draft');
             $table->timestamps();
 
             // Add index for ordering

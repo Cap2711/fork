@@ -19,11 +19,14 @@ class Quiz extends Model
     protected $fillable = [
         'unit_id',
         'title',
-        'passing_score'
+        'passing_score',
+        'status',
+        'review_status'
     ];
 
     protected $casts = [
-        'passing_score' => 'integer'
+        'passing_score' => 'integer',  'status' => 'string',
+        'review_status' => 'string'
     ];
 
     /**

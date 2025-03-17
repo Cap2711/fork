@@ -39,7 +39,7 @@ return new class extends Migration
             $table->index('action');
             $table->index('area');
             $table->index('performed_at');
-            $table->index(['auditable_type', 'auditable_id']);
+            // Removed duplicate index: $table->index(['auditable_type', 'auditable_id']);
             $table->index('status');
             $table->index('ip_address');
             $table->index('is_system_action');

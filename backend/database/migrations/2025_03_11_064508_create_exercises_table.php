@@ -34,6 +34,7 @@ return new class extends Migration
             // Organization
             $table->string('difficulty_level')->default('beginner');
             $table->integer('order')->default(0);
+            $table->enum('status', ['draft', 'published', 'archived'])->default('draft');
             $table->boolean('is_published')->default(false);
             
             $table->timestamps();

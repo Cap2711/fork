@@ -21,11 +21,14 @@ class Section extends Model
         'lesson_id',
         'title',
         'content',
-        'order'
+        'order',
+        'status',
+        'review_status'
     ];
 
     protected $casts = [
-        'order' => 'integer'
+        'order' => 'integer',  'status' => 'string',
+        'review_status' => 'string'
     ];
 
     /**
