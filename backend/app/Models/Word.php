@@ -2,18 +2,16 @@
 
 namespace App\Models;
 
-use App\Models\Traits\HasMedia;
-use App\Models\Traits\HasAuditLog;
-use App\Models\Traits\HasVersions;
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Traits\{HasVersions, HasAuditLog};
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\{BelongsTo, HasMany, HasManyThrough};
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\{BelongsTo, HasMany, BelongsToMany};
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-class Word extends Model
+class Word extends Model implements HasMedia
 {
-    use HasFactory, HasMedia, HasAuditLog, HasVersions;
-
-    const AUDIT_AREA = 'words';
+    use HasFactory, InteractsWithMedia, HasAuditLog, HasVersions;
 
     protected $fillable = [
         'language_id',
@@ -27,12 +25,25 @@ class Word extends Model
         'metadata' => 'array'
     ];
 
-    protected array $versionedAttributes = [
+    protected array $auditLogEvents = [
+        'created' => 'Created new word: :text (:language)',
+        'updated' => 'Updated word: :text',
+        'deleted' => 'Deleted word: :text',
+    ];
+
+    protected array $auditLogProperties = [
         'text',
         'pronunciation_key',
         'part_of_speech',
         'metadata'
     ];
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('pronunciation')
+            ->singleFile()
+            ->acceptsMimeTypes(['audio/mpeg', 'audio/mp3', 'audio/wav']);
+    }
 
     /**
      * Get the language this word belongs to.
@@ -43,135 +54,36 @@ class Word extends Model
     }
 
     /**
-     * Get translations for this word.
+     * Get the translations of this word.
      */
     public function translations(): HasMany
     {
-        return $this->hasMany(WordTranslation::class)
-            ->orderBy('translation_order');
+        return $this->hasMany(WordTranslation::class);
     }
 
     /**
-     * Get sentences that use this word.
+     * Get the sentences this word appears in.
      */
-    public function sentences(): HasManyThrough
+    public function sentences(): BelongsToMany
     {
-        return $this->hasManyThrough(
-            Sentence::class,
-            SentenceWord::class,
-            'word_id',
-            'id',
-            'id',
-            'sentence_id'
-        );
+        return $this->belongsToMany(Sentence::class, 'sentence_words')
+            ->withPivot(['position', 'start_time', 'end_time', 'metadata'])
+            ->orderBy('position');
     }
 
     /**
-     * Register media collections for this model.
+     * Get this word's usage examples.
      */
-    public function registerMediaCollections(): void
+    public function usageExamples(): HasMany
     {
-        // Pronunciation audio in source language
-        $this->addMediaCollection('pronunciation')
-            ->acceptsMimeTypes(['audio/mpeg', 'audio/wav'])
-            ->useDisk('public')
-            ->singleFile()
-            ->registerMediaConversions(function () {
-                $this->addMediaConversion('web')
-                    ->format('mp3')
-                    ->extractAudio();
-            });
-
-        // Visual aids or contextual images
-        $this->addMediaCollection('visuals')
-            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/gif'])
-            ->useDisk('public')
-            ->singleFile()
-            ->registerMediaConversions(function () {
-                $this->addMediaConversion('thumbnail')
-                    ->width(200)
-                    ->height(200);
-            });
+        return $this->hasMany(UsageExample::class);
     }
 
     /**
-     * Get pronunciation URL with optional language code.
+     * Custom attribute for audit log message.
      */
-    public function getPronunciationUrl(?string $languageCode = null): ?string
+    public function getLanguageAttribute(): string
     {
-        $collection = $languageCode 
-            ? "pronunciation_{$languageCode}" 
-            : 'pronunciation';
-
-        $media = $this->getFirstMedia($collection);
-        return $media ? $media->getUrl('web') : null;
-    }
-
-    /**
-     * Add pronunciation for a specific language.
-     */
-    public function addPronunciation(string $languageCode, $file): void
-    {
-        $collection = "pronunciation_{$languageCode}";
-        
-        // Clear existing pronunciation if any
-        $this->clearMediaCollection($collection);
-        
-        // Add new pronunciation
-        $this->addMedia($file)
-            ->usingFileName("{$this->id}_{$languageCode}.mp3")
-            ->toMediaCollection($collection);
-    }
-
-    /**
-     * Get preview data for the word.
-     */
-    public function getPreviewData(string $targetLanguageCode = 'en'): array
-    {
-        $targetLanguage = Language::where('code', $targetLanguageCode)->first();
-
-        return [
-            'id' => $this->id,
-            'text' => $this->text,
-            'pronunciation_key' => $this->pronunciation_key,
-            'part_of_speech' => $this->part_of_speech,
-            'language' => $this->language->code,
-            'translations' => $targetLanguage ? 
-                $this->translations()
-                    ->where('language_id', $targetLanguage->id)
-                    ->get()
-                    ->map(fn($t) => [
-                        'text' => $t->text,
-                        'context_notes' => $t->context_notes,
-                        'usage_examples' => $t->usage_examples
-                    ]) : [],
-            'media' => [
-                'pronunciation' => [
-                    'source' => $this->getPronunciationUrl(),
-                    'target' => $this->getPronunciationUrl($targetLanguageCode)
-                ],
-                'visual' => $this->getFirstMediaUrl('visuals', 'thumbnail')
-            ],
-            'metadata' => $this->metadata
-        ];
-    }
-
-    /**
-     * Get similar words (for suggestions/corrections).
-     */
-    public function getSimilarWords(int $limit = 5): array
-    {
-        return static::query()
-            ->where('language_id', $this->language_id)
-            ->where('id', '!=', $this->id)
-            ->where('text', 'LIKE', substr($this->text, 0, 3) . '%')
-            ->limit($limit)
-            ->get()
-            ->map(fn($w) => [
-                'id' => $w->id,
-                'text' => $w->text,
-                'translation' => $w->translations->first()?->text
-            ])
-            ->toArray();
+        return $this->language?->code ?? 'unknown';
     }
 }

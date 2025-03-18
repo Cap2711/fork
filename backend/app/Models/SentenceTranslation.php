@@ -2,17 +2,16 @@
 
 namespace App\Models;
 
-use App\Models\Traits\HasMedia;
-use App\Models\Traits\HasAuditLog;
-use Illuminate\Database\Eloquent\Model;
+use App\Models\Traits\{HasVersions, HasAuditLog};
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-class SentenceTranslation extends Model
+class SentenceTranslation extends Model implements HasMedia
 {
-    use HasFactory, HasMedia, HasAuditLog;
-
-    const AUDIT_AREA = 'sentence_translations';
+    use HasFactory, InteractsWithMedia, HasAuditLog, HasVersions;
 
     protected $fillable = [
         'sentence_id',
@@ -22,8 +21,27 @@ class SentenceTranslation extends Model
         'context_notes'
     ];
 
+    protected array $auditLogEvents = [
+        'created' => 'Created translation for sentence ":original" in :language: :text',
+        'updated' => 'Updated translation for sentence ":original" in :language',
+        'deleted' => 'Deleted translation for sentence ":original" in :language'
+    ];
+
+    protected array $auditLogProperties = [
+        'text',
+        'pronunciation_key',
+        'context_notes'
+    ];
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('audio')
+            ->singleFile()
+            ->acceptsMimeTypes(['audio/mpeg', 'audio/mp3', 'audio/wav']);
+    }
+
     /**
-     * Get the sentence being translated.
+     * Get the original sentence this translation belongs to.
      */
     public function sentence(): BelongsTo
     {
@@ -31,7 +49,7 @@ class SentenceTranslation extends Model
     }
 
     /**
-     * Get the target language.
+     * Get the target language of this translation.
      */
     public function language(): BelongsTo
     {
@@ -39,65 +57,15 @@ class SentenceTranslation extends Model
     }
 
     /**
-     * Register media collections.
+     * Custom attributes for audit log message.
      */
-    public function registerMediaCollections(): void
+    public function getOriginalAttribute(): string
     {
-        // Translation pronunciation
-        $this->addMediaCollection('pronunciation')
-            ->acceptsMimeTypes(['audio/mpeg', 'audio/wav'])
-            ->useDisk('public')
-            ->singleFile()
-            ->registerMediaConversions(function () {
-                $this->addMediaConversion('web')
-                    ->format('mp3')
-                    ->extractAudio();
-            });
-
-        // Slow pronunciation for learning
-        $this->addMediaCollection('slow_pronunciation')
-            ->acceptsMimeTypes(['audio/mpeg', 'audio/wav'])
-            ->useDisk('public')
-            ->singleFile()
-            ->registerMediaConversions(function () {
-                $this->addMediaConversion('web')
-                    ->format('mp3')
-                    ->extractAudio();
-            });
+        return $this->sentence?->text ?? 'unknown';
     }
 
-    /**
-     * Get pronunciation URL for either normal or slow speed.
-     */
-    public function getPronunciationUrl(bool $slow = false): ?string
+    public function getLanguageAttribute(): string
     {
-        $collection = $slow ? 'slow_pronunciation' : 'pronunciation';
-        $media = $this->getFirstMedia($collection);
-        return $media ? $media->getUrl('web') : null;
-    }
-
-    /**
-     * Get preview data for the translation.
-     */
-    public function getPreviewData(): array
-    {
-        return [
-            'id' => $this->id,
-            'text' => $this->text,
-            'pronunciation_key' => $this->pronunciation_key,
-            'context_notes' => $this->context_notes,
-            'language' => [
-                'code' => $this->language->code,
-                'name' => $this->language->name
-            ],
-            'media' => [
-                'pronunciation' => [
-                    'normal' => $this->getPronunciationUrl(false),
-                    'slow' => $this->getPronunciationUrl(true)
-                ]
-            ],
-            'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at
-        ];
+        return $this->language?->code ?? 'unknown';
     }
 }
