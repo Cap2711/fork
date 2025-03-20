@@ -8,6 +8,7 @@ use App\Models\Traits\HasVersions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class QuizQuestion extends Model
 {
@@ -57,6 +58,42 @@ class QuizQuestion extends Model
     public function quiz(): BelongsTo
     {
         return $this->belongsTo(Quiz::class);
+    }
+
+    /**
+     * Get attempts statistics for this question
+     */
+    public function getAttemptStats(): array
+    {
+        $stats = DB::table('quiz_attempts')
+            ->where('quiz_id', $this->quiz_id)
+            ->whereJsonContains('question_results', ['question_id' => $this->id])
+            ->select([
+                DB::raw('COUNT(*) as total_attempts'),
+                DB::raw('SUM(JSON_EXTRACT(question_results, "$[*].correct")) as correct_attempts')
+            ])
+            ->first();
+
+        return [
+            'total_attempts' => $stats->total_attempts ?? 0,
+            'correct_attempts' => $stats->correct_attempts ?? 0,
+            'success_rate' => $stats->total_attempts > 0 
+                ? ($stats->correct_attempts / $stats->total_attempts) * 100 
+                : 0
+        ];
+    }
+
+    /**
+     * Get correct answer for feedback (only when student answered incorrectly)
+     */
+    public function getCorrectAnswer(): string|array
+    {
+        return match($this->type) {
+            self::TYPE_SINGLE_CHOICE, self::TYPE_TRUE_FALSE => $this->correct_answer['value'],
+            self::TYPE_MULTIPLE_CHOICE => $this->correct_answer['values'],
+            self::TYPE_SHORT_ANSWER => $this->correct_answer['value'],
+            default => ''
+        };
     }
 
     /**

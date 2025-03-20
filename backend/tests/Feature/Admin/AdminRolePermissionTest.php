@@ -6,7 +6,7 @@ use App\Models\Role;
 use App\Models\Permission;
 use App\Models\User;
 
-class RolePermissionTest extends AdminTestCase
+class AdminRolePermissionTest extends AdminTestCase
 {
     public function test_admin_can_list_roles()
     {

@@ -6,7 +6,7 @@ use App\Models\LearningPath;
 use App\Models\AuditLog;
 use App\Models\User;
 
-class AuditLogTest extends AdminTestCase
+class AdminAuditLogTest extends AdminTestCase
 {
     protected LearningPath $learningPath;
 

@@ -10,7 +10,7 @@ use App\Models\Exercise;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-class SectionTest extends AdminTestCase
+class AdminSectionTest extends AdminTestCase
 {
     protected LearningPath $learningPath;
     protected Unit $unit;

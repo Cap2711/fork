@@ -9,7 +9,7 @@ use App\Models\VocabularyItem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-class VocabularyTest extends AdminTestCase
+class AdminVocabularyTest extends AdminTestCase
 {
     protected LearningPath $learningPath;
     protected Unit $unit;

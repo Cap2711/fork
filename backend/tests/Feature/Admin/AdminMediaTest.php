@@ -6,7 +6,7 @@ use App\Models\MediaFile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-class MediaTest extends AdminTestCase
+class AdminMediaTest extends AdminTestCase
 {
     protected function setUp(): void
     {

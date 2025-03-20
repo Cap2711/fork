@@ -10,7 +10,7 @@ use App\Models\DailyGoal;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-class GamificationTest extends AdminTestCase
+class AdminGamificationTest extends AdminTestCase
 {
     protected function setUp(): void
     {

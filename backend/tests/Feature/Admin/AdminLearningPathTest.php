@@ -7,7 +7,7 @@ use App\Models\Unit;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-class LearningPathTest extends AdminTestCase
+class AdminLearningPathTest extends AdminTestCase
 {
     protected function setUp(): void
     {

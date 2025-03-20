@@ -38,10 +38,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Exercises
     Route::get('exercises', [ExerciseController::class, 'index']);
     Route::get('exercises/{exercise}', [ExerciseController::class, 'show']);
+    Route::post('exercises/{exercise}/check', [ExerciseController::class, 'checkAnswer']);
+    Route::get('exercises/{exercise}/statistics', [ExerciseController::class, 'statistics']);
     
     // Quizzes
     Route::get('quizzes', [QuizController::class, 'index']);
     Route::get('quizzes/{quiz}', [QuizController::class, 'show']);
+    Route::post('quizzes/{quiz}/submit', [QuizController::class, 'submit']);
+    Route::get('quizzes/{quiz}/history', [QuizController::class, 'history']);
+    Route::get('quizzes/{quiz}/statistics', [QuizController::class, 'statistics']);
     
     // Quiz Questions
     Route::get('quiz-questions', [QuizQuestionController::class, 'index']);

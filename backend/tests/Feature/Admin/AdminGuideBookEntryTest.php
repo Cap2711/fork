@@ -8,7 +8,7 @@ use App\Models\GuideBookEntry;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-class GuideBookEntryTest extends AdminTestCase
+class AdminGuideBookEntryTest extends AdminTestCase
 {
     protected LearningPath $learningPath;
     protected Unit $unit;

@@ -130,19 +130,19 @@ class QuizController extends BaseAPIController
      */
     private function getNextQuizSuggestion(Quiz $quiz, bool $passed): ?array
     {
-        $nextQuiz = $passed ? 
+        $nextQuiz = $passed ?
             Quiz::where('unit_id', $quiz->unit_id)
-                ->where('order', '>', $quiz->order)
-                ->orderBy('order')
-                ->first() :
-            Quiz::whereIn('id', function($query) use ($quiz) {
+            ->where('order', '>', $quiz->order)
+            ->orderBy('order')
+            ->first() :
+            Quiz::whereIn('id', function ($query) use ($quiz) {
                 $query->select('quiz_id')
                     ->from('quiz_questions')
-                    ->whereIn('topic', function($q) use ($quiz) {
+                    ->whereIn('topic', function ($q) use ($quiz) {
                         $q->select('topic')
                             ->from('quiz_questions')
                             ->where('quiz_id', $quiz->id)
-                            ->whereIn('id', function($sq) {
+                            ->whereIn('id', function ($sq) {
                                 $sq->select('question_id')
                                     ->from('user_progress')
                                     ->where('user_id', auth()->id())
@@ -182,7 +182,7 @@ class QuizController extends BaseAPIController
                 return [
                     'question_id' => $question->id,
                     'question' => $question->question,
-                    'success_rate' => $question->attempt_count > 0 ? 
+                    'success_rate' => $question->attempt_count > 0 ?
                         ($question->correct_count / $question->attempt_count) * 100 : 0
                 ];
             })

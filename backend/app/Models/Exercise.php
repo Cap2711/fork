@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Exercise extends Model
 {
@@ -35,7 +36,8 @@ class Exercise extends Model
     protected $casts = [
         'content' => 'array',
         'answers' => 'array',
-        'order' => 'integer',  'status' => 'string',
+        'order' => 'integer',
+        'status' => 'string',
         'review_status' => 'string'
     ];
 
@@ -66,11 +68,55 @@ class Exercise extends Model
     }
 
     /**
+     * Get all attempts for this exercise.
+     */
+    public function attempts(): HasMany
+    {
+        return $this->hasMany(ExerciseAttempt::class);
+    }
+
+    /**
+     * Calculate the success rate for this exercise
+     */
+    public function getSuccessRate(): float
+    {
+        $totalAttempts = $this->attempts()->count();
+        if ($totalAttempts === 0) {
+            return 0.0;
+        }
+
+        $successfulAttempts = $this->attempts()->where('is_correct', true)->count();
+        return round(($successfulAttempts / $totalAttempts) * 100, 2);
+    }
+
+    /**
+     * Get average completion time in seconds
+     */
+    public function getAverageCompletionTime(): ?float
+    {
+        return $this->attempts()
+            ->whereNotNull('time_taken_seconds')
+            ->avg('time_taken_seconds');
+    }
+
+    /**
+     * Scope query to exercises that might need review based on low success rates
+     */
+    public function scopeNeedsReview($query, int $minimumAttempts = 10, float $successThreshold = 0.5)
+    {
+        return $query->withCount(['attempts', 'attempts as successful_attempts' => function ($query) {
+            $query->where('is_correct', true);
+        }])
+        ->having('attempts_count', '>=', $minimumAttempts)
+        ->havingRaw('(successful_attempts / attempts_count) < ?', [$successThreshold]);
+    }
+
+    /**
      * Check if the given answer is correct
      */
     public function checkAnswer($userAnswer): bool
     {
-        return match($this->type) {
+        return match ($this->type) {
             self::TYPE_MULTIPLE_CHOICE => $this->checkMultipleChoice($userAnswer),
             self::TYPE_FILL_BLANK => $this->checkFillBlank($userAnswer),
             self::TYPE_MATCHING => $this->checkMatching($userAnswer),
@@ -93,11 +139,12 @@ class Exercise extends Model
     private function checkFillBlank($answer): bool
     {
         $correct = $this->answers['correct'];
-        
+
         if (is_array($correct)) {
             // Multiple acceptable answers
             return collect($correct)
-                ->contains(fn($value) => 
+                ->contains(
+                    fn($value) =>
                     strtolower(trim($answer)) === strtolower(trim($value))
                 );
         }
@@ -183,7 +230,7 @@ class Exercise extends Model
      */
     public static function getValidationRules(string $type): array
     {
-        return match($type) {
+        return match ($type) {
             self::TYPE_MULTIPLE_CHOICE => [
                 'content.question' => 'required|string',
                 'content.options' => 'required|array|min:2',

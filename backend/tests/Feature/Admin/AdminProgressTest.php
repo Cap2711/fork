@@ -9,7 +9,7 @@ use App\Models\Lesson;
 use App\Models\UserProgress;
 use App\Models\XpHistory;
 
-class ProgressTest extends AdminTestCase
+class AdminProgressTest extends AdminTestCase
 {
     protected User $student;
     protected LearningPath $learningPath;

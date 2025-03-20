@@ -2,365 +2,303 @@
 
 namespace App\Http\Controllers\API\Admin;
 
-use App\Http\Controllers\API\BaseAPIController;
-use App\Models\LearningPath;
+use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Language;
+use App\Models\LearningPath;
+use App\Models\Unit;
+use App\Models\Lesson;
+use App\Models\Exercise;
 use App\Models\UserProgress;
-use App\Models\AuditLog;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
+use App\Models\UserStreak;
+use App\Models\XpHistory;
+use App\Models\Achievement;
+use App\Models\UserFeedback;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
-class AdminDashboardController extends BaseAPIController
+class AdminDashboardController extends Controller
 {
-    /**
-     * Get summary statistics for the dashboard
-     */
-    public function summary(): JsonResponse
+    public function engagement(): JsonResponse
     {
-        $now = Carbon::now();
-        $thirtyDaysAgo = $now->copy()->subDays(30);
+        $today = Carbon::today();
+        
+        // Get daily active users - users who completed at least one lesson today
+        $dailyActiveUsers = UserProgress::whereDate('created_at', $today)
+            ->distinct('user_id')
+            ->count();
+        
+        // Get streak statistics
+        $streakStats = UserStreak::selectRaw('
+            COUNT(*) as users_with_streaks,
+            AVG(current_streak) as average_streak,
+            MAX(current_streak) as longest_current_streak')
+            ->first();
 
-        // Active users in last 30 days
-        $activeUsers = User::where('last_login_at', '>=', $thirtyDaysAgo)->count();
+        // Calculate user retention (active in last 7 days)
+        $newUsersLastWeek = User::where('created_at', '>=', Carbon::now()->subDays(7))->count();
+        $retainedUsers = User::whereHas('progress', function($query) {
+            $query->where('created_at', '>=', Carbon::now()->subDays(7));
+        })->count();
+        
+        $retentionRate = $newUsersLastWeek > 0 
+            ? ($retainedUsers / $newUsersLastWeek) * 100
+            : 0;
 
-        // Content statistics
-        $contentStats = [
-            'learning_paths' => [
-                'total' => LearningPath::count(),
-                'published' => LearningPath::where('status', 'published')->count(),
-                'draft' => LearningPath::where('status', 'draft')->count()
-            ],
-            'units' => DB::table('units')->count(),
-            'lessons' => DB::table('lessons')->count(),
-            'exercises' => DB::table('exercises')->count()
-        ];
-
-        // Progress statistics
-        $progressStats = [
-            'completed' => UserProgress::where('status', 'completed')
-                ->where('updated_at', '>=', $thirtyDaysAgo)
-                ->count(),
-            'in_progress' => UserProgress::where('status', 'in_progress')
-                ->where('updated_at', '>=', $thirtyDaysAgo)
-                ->count(),
-            'completion_rate' => $this->calculateCompletionRate($thirtyDaysAgo)
-        ];
-
-        // System statistics
-        $systemStats = [
-            'total_users' => User::count(),
-            'active_users' => $activeUsers,
-            'new_users' => User::where('created_at', '>=', $thirtyDaysAgo)->count(),
-            'storage_used' => $this->calculateStorageUsed()
-        ];
-
-        return $this->sendResponse([
-            'content_stats' => $contentStats,
-            'progress_stats' => $progressStats,
-            'system_stats' => $systemStats,
-            'last_updated' => $now
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'daily_active_users' => $dailyActiveUsers,
+                'streak_statistics' => [
+                    'users_with_streaks' => $streakStats->users_with_streaks,
+                    'average_streak_length' => round($streakStats->average_streak, 1),
+                    'longest_current_streak' => $streakStats->longest_current_streak
+                ],
+                'engagement_metrics' => [
+                    'new_users_today' => User::whereDate('created_at', $today)->count(),
+                    'lessons_completed_today' => UserProgress::where('status', 'completed')
+                        ->whereDate('created_at', $today)
+                        ->count(),
+                    'total_xp_earned_today' => XpHistory::whereDate('created_at', $today)
+                        ->sum('amount')
+                ],
+                'retention_rate' => round($retentionRate, 2)
+            ]
         ]);
     }
 
-    /**
-     * Get recent activity for the dashboard
-     */
-    public function recentActivity(Request $request): JsonResponse
+    public function progress(): JsonResponse
     {
-        $limit = $request->input('limit', 10);
-        
-        $activities = AuditLog::with('user')
-            ->orderBy('performed_at', 'desc')
-            ->limit($limit)
+        // Calculate completion rates
+        $overallStats = UserProgress::where('status', 'completed')
+            ->selectRaw('
+                COUNT(*) as total_completions,
+                COUNT(DISTINCT user_id) as unique_users,
+                COUNT(DISTINCT trackable_id) as unique_lessons')
+            ->first();
+
+        // Get completion rates by language
+        $languageStats = Language::withCount([
+            'learningPaths',
+            'learningPaths as completed_lessons' => function($query) {
+                $query->whereHas('units.lessons.progress', function($q) {
+                    $q->where('status', 'completed');
+                });
+            }
+        ])->get()->mapWithKeys(function($language) {
+            $total = $language->learning_paths_count;
+            $completed = $language->completed_lessons;
+            
+            return [
+                $language->name => [
+                    'completion_rate' => $total > 0 ? round(($completed / $total) * 100, 2) : 0,
+                    'total_paths' => $total,
+                    'completed_lessons' => $completed
+                ]
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'completion_rates' => [
+                    'overall' => $overallStats->total_completions > 0 
+                        ? round(($overallStats->unique_users / User::count()) * 100, 2)
+                        : 0,
+                    'by_language' => $languageStats
+                ],
+                'popular_content' => [
+                    'lessons' => Lesson::withCount('progress')
+                        ->orderByDesc('progress_count')
+                        ->take(5)
+                        ->get(['id', 'title', 'progress_count']),
+                    'paths' => LearningPath::withCount('progress')
+                        ->orderByDesc('progress_count')
+                        ->take(5)
+                        ->get(['id', 'title', 'progress_count'])
+                ],
+                'learning_metrics' => [
+                    'average_time_per_lesson' => UserProgress::where('status', 'completed')
+                        ->whereNotNull('started_at')
+                        ->whereNotNull('completed_at')
+                        ->avg(DB::raw('TIMESTAMPDIFF(MINUTE, started_at, completed_at)')),
+                    'total_active_learners' => UserProgress::distinct('user_id')->count(),
+                    'lessons_completed_this_week' => UserProgress::where('status', 'completed')
+                        ->where('created_at', '>=', Carbon::now()->startOfWeek())
+                        ->count()
+                ]
+            ]
+        ]);
+    }
+
+    public function achievements(): JsonResponse
+    {
+        // Get all achievements with user counts
+        $achievements = Achievement::withCount('users')
             ->get()
-            ->map(function ($log) {
+            ->map(function($achievement) {
+                $totalUsers = User::count();
                 return [
-                    'id' => $log->id,
-                    'action' => $log->action,
-                    'area' => $log->area,
-                    'user' => $log->user ? [
-                        'id' => $log->user->id,
-                        'name' => $log->user->name
-                    ] : null,
-                    'status' => $log->status,
-                    'performed_at' => $log->performed_at,
-                    'description' => $log->getDescription()
+                    'id' => $achievement->id,
+                    'name' => $achievement->name,
+                    'description' => $achievement->description,
+                    'total_earners' => $achievement->users_count,
+                    'completion_rate' => $totalUsers > 0 
+                        ? round(($achievement->users_count / $totalUsers) * 100, 2)
+                        : 0
                 ];
             });
 
-        return $this->sendResponse($activities);
-    }
+        // Get top achievers
+        $topAchievers = User::withCount('achievements')
+            ->orderByDesc('achievements_count')
+            ->limit(10)
+            ->get()
+            ->map(function($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'achievements_count' => $user->achievements_count,
+                    'latest_achievement' => $user->achievements()
+                        ->latest('user_achievement.created_at')
+                        ->first(['name', 'description'])
+                ];
+            });
 
-    /**
-     * Get detailed content statistics
-     */
-    public function contentStats(): JsonResponse
-    {
-        // Content creation over time
-        $contentOverTime = $this->getContentCreationStats();
+        // Calculate achievement statistics
+        $totalAchievements = $achievements->count();
+        $averageCompletion = $achievements->avg('completion_rate');
 
-        // Most active content
-        $mostActiveContent = $this->getMostActiveContent();
-
-        // Content engagement metrics
-        $engagementMetrics = $this->getEngagementMetrics();
-
-        // Content completion rates
-        $completionRates = $this->getCompletionRates();
-
-        return $this->sendResponse([
-            'content_over_time' => $contentOverTime,
-            'most_active' => $mostActiveContent,
-            'engagement_metrics' => $engagementMetrics,
-            'completion_rates' => $completionRates
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total_achievements' => $totalAchievements,
+                'average_completion_rate' => round($averageCompletion, 2),
+                'achievements' => $achievements,
+                'top_achievers' => $topAchievers
+            ]
         ]);
     }
 
-    /**
-     * Calculate the overall completion rate since a given date
-     */
-    private function calculateCompletionRate(Carbon $since): float
+    public function leaderboards(): JsonResponse
     {
-        $totalAttempts = UserProgress::where('created_at', '>=', $since)->count();
-        
-        if ($totalAttempts === 0) {
-            return 0;
-        }
+        $now = Carbon::now();
 
-        $completedAttempts = UserProgress::where('created_at', '>=', $since)
-            ->where('status', 'completed')
-            ->count();
-
-        return ($completedAttempts / $totalAttempts) * 100;
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'daily_leaders' => $this->getLeaderboard($now->copy()->startOfDay()),
+                'weekly_leaders' => $this->getLeaderboard($now->copy()->startOfWeek()),
+                'monthly_leaders' => $this->getLeaderboard($now->copy()->startOfMonth()),
+                'all_time_stats' => [
+                    'total_xp_awarded' => XpHistory::sum('amount'),
+                    'average_user_xp' => round(XpHistory::avg('amount'), 2),
+                    'highest_single_day' => XpHistory::selectRaw("DATE(created_at) as date, SUM(amount) as total")
+                        ->groupBy('date')
+                        ->orderByDesc('total')
+                        ->first()
+                ]
+            ]
+        ]);
     }
 
-    /**
-     * Calculate total storage used by media files
-     */
-    private function calculateStorageUsed(): array
+    protected function getLeaderboard(Carbon $startDate): array
     {
-        $totalSize = DB::table('media_files')->sum('size');
-        
-        return [
-            'bytes' => $totalSize,
-            'formatted' => $this->formatBytes($totalSize)
-        ];
-    }
-
-    /**
-     * Get content creation statistics over time
-     */
-    private function getContentCreationStats(): array
-    {
-        $thirtyDaysAgo = Carbon::now()->subDays(30);
-
-        return [
-            'learning_paths' => $this->getCreationTrend('learning_paths', $thirtyDaysAgo),
-            'units' => $this->getCreationTrend('units', $thirtyDaysAgo),
-            'lessons' => $this->getCreationTrend('lessons', $thirtyDaysAgo),
-            'exercises' => $this->getCreationTrend('exercises', $thirtyDaysAgo)
-        ];
-    }
-
-    /**
-     * Get creation trend for a specific content type
-     */
-    private function getCreationTrend(string $table, Carbon $since): array
-    {
-        return DB::table($table)
-            ->select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as count')
-            )
-            ->where('created_at', '>=', $since)
-            ->groupBy('date')
-            ->orderBy('date')
+        return XpHistory::where('created_at', '>=', $startDate)
+            ->groupBy('user_id')
+            ->selectRaw('user_id, SUM(amount) as total_xp, COUNT(*) as activities')
+            ->with('user:id,name')
+            ->orderByDesc('total_xp')
+            ->take(10)
             ->get()
-            ->pluck('count', 'date')
-            ->toArray();
-    }
-
-    /**
-     * Get most active content
-     */
-    private function getMostActiveContent(): array
-    {
-        $thirtyDaysAgo = Carbon::now()->subDays(30);
-
-        return [
-            'learning_paths' => $this->getMostActiveByType(
-                'learning_paths',
-                $thirtyDaysAgo
-            ),
-            'units' => $this->getMostActiveByType('units', $thirtyDaysAgo),
-            'lessons' => $this->getMostActiveByType('lessons', $thirtyDaysAgo)
-        ];
-    }
-
-    /**
-     * Get most active content by type
-     */
-    private function getMostActiveByType(string $type, Carbon $since): array
-    {
-        return UserProgress::where('trackable_type', 'App\\Models\\' . Str::studly(Str::singular($type)))
-            ->where('updated_at', '>=', $since)
-            ->select('trackable_id', DB::raw('COUNT(*) as interactions'))
-            ->groupBy('trackable_id')
-            ->orderByDesc('interactions')
-            ->limit(5)
-            ->get()
-            ->map(function ($progress) use ($type) {
-                $model = 'App\\Models\\' . Str::studly(Str::singular($type));
-                $content = $model::find($progress->trackable_id);
+            ->map(function($entry) {
                 return [
-                    'id' => $progress->trackable_id,
-                    'title' => $content?->title ?? 'Unknown',
-                    'interactions' => $progress->interactions
+                    'user' => [
+                        'id' => $entry->user->id,
+                        'name' => $entry->user->name
+                    ],
+                    'xp' => $entry->total_xp,
+                    'activities' => $entry->activities
                 ];
             })
             ->toArray();
     }
 
-    /**
-     * Get engagement metrics
-     */
-    private function getEngagementMetrics(): array
+    public function contentHealth(): JsonResponse
     {
-        $thirtyDaysAgo = Carbon::now()->subDays(30);
-
-        return [
-            'average_completion_time' => $this->getAverageCompletionTime($thirtyDaysAgo),
-            'average_attempts' => $this->getAverageAttempts($thirtyDaysAgo),
-            'user_retention' => $this->getUserRetention($thirtyDaysAgo)
-        ];
-    }
-
-    /**
-     * Get average completion time
-     */
-    private function getAverageCompletionTime(Carbon $since): array
-    {
-        $progress = UserProgress::where('status', 'completed')
-            ->where('created_at', '>=', $since)
-            ->whereNotNull('meta_data->time_spent')
-            ->get();
-
-        if ($progress->isEmpty()) {
-            return ['average' => 0, 'count' => 0];
-        }
-
-        $totalTime = $progress->sum(function ($record) {
-            return $record->meta_data['time_spent'] ?? 0;
-        });
-
-        return [
-            'average' => $totalTime / $progress->count(),
-            'count' => $progress->count()
-        ];
-    }
-
-    /**
-     * Get average attempts per completion
-     */
-    private function getAverageAttempts(Carbon $since): array
-    {
-        $progress = UserProgress::where('status', 'completed')
-            ->where('created_at', '>=', $since)
-            ->whereNotNull('meta_data->attempts')
-            ->get();
-
-        if ($progress->isEmpty()) {
-            return ['average' => 0, 'count' => 0];
-        }
-
-        $totalAttempts = $progress->sum(function ($record) {
-            return $record->meta_data['attempts'] ?? 0;
-        });
-
-        return [
-            'average' => $totalAttempts / $progress->count(),
-            'count' => $progress->count()
-        ];
-    }
-
-    /**
-     * Get user retention metrics
-     */
-    private function getUserRetention(Carbon $since): array
-    {
-        $totalUsers = User::where('created_at', '>=', $since)->count();
-        
-        if ($totalUsers === 0) {
-            return ['rate' => 0, 'active_users' => 0, 'total_users' => 0];
-        }
-
-        $activeUsers = User::where('created_at', '>=', $since)
-            ->where('last_login_at', '>=', Carbon::now()->subDays(7))
-            ->count();
-
-        return [
-            'rate' => ($activeUsers / $totalUsers) * 100,
-            'active_users' => $activeUsers,
-            'total_users' => $totalUsers
-        ];
-    }
-
-    /**
-     * Get completion rates for different content types
-     */
-    private function getCompletionRates(): array
-    {
-        $types = ['learning_paths', 'units', 'lessons', 'exercises'];
-        $rates = [];
-
-        foreach ($types as $type) {
-            $rates[$type] = $this->getCompletionRateByType($type);
-        }
-
-        return $rates;
-    }
-
-    /**
-     * Get completion rate for a specific content type
-     */
-    private function getCompletionRateByType(string $type): array
-    {
-        $progress = UserProgress::where('trackable_type', 'App\\Models\\' . Str::studly(Str::singular($type)))
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
+        // Find content that might need review
+        $needsReview = [
+            'lessons' => Lesson::withCount(['progress', 'progress as completed_count' => function($query) {
+                $query->where('status', 'completed');
+            }])
+            ->having('progress_count', '>', 10)
+            ->havingRaw('(completed_count / progress_count) < 0.5')
+            ->with('unit.learningPath')
             ->get()
-            ->pluck('count', 'status')
-            ->toArray();
-
-        $total = array_sum($progress);
-        
-        if ($total === 0) {
-            return ['rate' => 0, 'completed' => 0, 'total' => 0];
-        }
-
-        $completed = $progress['completed'] ?? 0;
-
-        return [
-            'rate' => ($completed / $total) * 100,
-            'completed' => $completed,
-            'total' => $total
+            ->map(function($lesson) {
+                return [
+                    'id' => $lesson->id,
+                    'title' => $lesson->title,
+                    'path' => $lesson->unit->learningPath->title,
+                    'completion_rate' => round(($lesson->completed_count / $lesson->progress_count) * 100, 2)
+                ];
+            }),
+            
+            'exercises' => Exercise::withCount(['attempts', 'attempts as correct_count' => function($query) {
+                $query->where('is_correct', true);
+            }])
+            ->having('attempts_count', '>', 10)
+            ->havingRaw('(correct_count / attempts_count) < 0.5')
+            ->with('lesson')
+            ->get()
+            ->map(function($exercise) {
+                return [
+                    'id' => $exercise->id,
+                    'type' => $exercise->type,
+                    'lesson' => $exercise->lesson->title,
+                    'success_rate' => round(($exercise->correct_count / $exercise->attempts_count) * 100, 2)
+                ];
+            })
         ];
-    }
 
-    /**
-     * Format bytes to human readable format
-     */
-    private function formatBytes(int $bytes): string
-    {
-        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        $bytes = max($bytes, 0);
-        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
-        $pow = min($pow, count($units) - 1);
-        $bytes /= pow(1024, $pow);
-
-        return round($bytes, 2) . ' ' . $units[$pow];
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'needs_review' => $needsReview,
+                'user_feedback' => UserFeedback::with(['user:id,name', 'content'])
+                    ->latest()
+                    ->take(10)
+                    ->get()
+                    ->map(function($feedback) {
+                        return [
+                            'id' => $feedback->id,
+                            'user' => $feedback->user->name,
+                            'content_type' => $feedback->content_type,
+                            'content_title' => $feedback->content->title ?? 'Unknown',
+                            'feedback' => $feedback->message,
+                            'rating' => $feedback->rating,
+                            'created_at' => $feedback->created_at->toISOString()
+                        ];
+                    }),
+                'error_rates' => [
+                    'by_exercise_type' => Exercise::join('exercise_attempts', 'exercises.id', '=', 'exercise_attempts.exercise_id')
+                        ->selectRaw('
+                            exercises.type,
+                            COUNT(*) as total_attempts,
+                            SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END) as error_count')
+                        ->groupBy('type')
+                        ->get()
+                        ->map(function($stat) {
+                            return [
+                                'type' => $stat->type,
+                                'error_rate' => $stat->total_attempts > 0 
+                                    ? round(($stat->error_count / $stat->total_attempts) * 100, 2)
+                                    : 0
+                            ];
+                        })
+                ]
+            ]
+        ]);
     }
 }

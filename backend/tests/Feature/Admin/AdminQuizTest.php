@@ -9,7 +9,7 @@ use App\Models\QuizQuestion;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-class QuizTest extends AdminTestCase
+class AdminQuizTest extends AdminTestCase
 {
     protected LearningPath $learningPath;
     protected Unit $unit;

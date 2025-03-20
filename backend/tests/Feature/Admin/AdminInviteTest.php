@@ -6,7 +6,7 @@ use App\Models\AdminInvite;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 
-class InviteTest extends AdminTestCase
+class AdminInviteTest extends AdminTestCase
 {
     protected function setUp(): void
     {

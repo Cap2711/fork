@@ -7,7 +7,7 @@ use App\Models\Unit;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
-class UnitTest extends AdminTestCase
+class AdminUnitTest extends AdminTestCase
 {
     protected LearningPath $learningPath;
 
