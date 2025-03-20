@@ -15,6 +15,8 @@ class AuditLog extends Model
         'user_id',
         'action',
         'area',
+        'auditable_type',
+        'auditable_id',
         'old_values',
         'new_values',
         'metadata',

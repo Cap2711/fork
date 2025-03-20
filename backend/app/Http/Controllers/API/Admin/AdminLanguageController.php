@@ -32,7 +32,13 @@ class AdminLanguageController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'code' => ['required', 'string', 'size:2', Rule::in(Language::getValidIsoCodes())],
+            'code' => [
+                'required', 
+                'string', 
+                'size:2', 
+                Rule::in(Language::getValidIsoCodes()),
+                Rule::unique('languages', 'code')
+            ],
             'name' => 'required|string|max:255',
             'native_name' => 'required|string|max:255',
             'is_active' => 'boolean'
@@ -89,7 +95,9 @@ class AdminLanguageController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Language status updated successfully'
+            'data' => [
+                'is_active' => $language->is_active
+            ]
         ]);
     }
 
@@ -109,13 +117,21 @@ class AdminLanguageController extends Controller
             ]
         ]);
 
-        $pair = Language::find($validated['source_language_id'])
-            ->targetLanguages()
-            ->attach($validated['target_language_id'], ['is_active' => true]);
+        $sourceLanguage = Language::find($validated['source_language_id']);
+        $sourceLanguage->targetLanguages()->attach($validated['target_language_id'], ['is_active' => true]);
+
+        // Get the created pair to return in response
+        $pair = LanguagePair::where('source_language_id', $validated['source_language_id'])
+            ->where('target_language_id', $validated['target_language_id'])
+            ->first();
 
         return response()->json([
             'success' => true,
-            'message' => 'Language pair created successfully'
+            'data' => [
+                'source_language_id' => $validated['source_language_id'],
+                'target_language_id' => $validated['target_language_id'],
+                'is_active' => true
+            ]
         ], 201);
     }
 
@@ -146,7 +162,9 @@ class AdminLanguageController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Language pair status updated successfully'
+            'data' => [
+                'is_active' => $validated['is_active']
+            ]
         ]);
     }
 

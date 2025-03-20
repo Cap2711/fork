@@ -86,4 +86,84 @@ class Word extends Model implements HasMedia
     {
         return $this->language?->code ?? 'unknown';
     }
+
+    /**
+     * Get the URL for the pronunciation audio.
+     */
+    public function getPronunciationUrl(): ?string
+    {
+        return $this->hasMedia('pronunciation') ? 
+            $this->getFirstMediaUrl('pronunciation') : null;
+    }
+
+    /**
+     * Get preview data for this word.
+     * 
+     * @param string|null $targetLanguage Optional target language code for translation
+     * @return array
+     */
+    public function getPreviewData(?string $targetLanguage = null): array
+    {
+        $data = [
+            'id' => $this->id,
+            'language_id' => $this->language_id,
+            'language_code' => null,
+            'text' => $this->text,
+            'pronunciation_key' => $this->pronunciation_key,
+            'part_of_speech' => $this->part_of_speech,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at
+        ];
+
+        // Set language code if available
+        if ($this->language && is_object($this->language) && isset($this->language->code)) {
+            $data['language_code'] = $this->language->code;
+        }
+
+        // Add media URLs if available
+        if ($this->hasMedia('pronunciation')) {
+            $data['pronunciation_url'] = $this->getFirstMediaUrl('pronunciation');
+        }
+
+        // Add translations if loaded
+        if ($this->relationLoaded('translations')) {
+            $translations = $this->translations;
+            
+            // Filter by target language if specified
+            if ($targetLanguage) {
+                $translations = $translations->filter(function ($translation) use ($targetLanguage) {
+                    if (!$translation->language || !is_object($translation->language)) {
+                        return false;
+                    }
+                    return $translation->language->code === $targetLanguage;
+                });
+            }
+            
+            $data['translations'] = $translations->map(function ($translation) {
+                $translationData = [
+                    'id' => $translation->id,
+                    'language_id' => $translation->language_id,
+                    'language_code' => null,
+                    'text' => $translation->text,
+                    'pronunciation_key' => $translation->pronunciation_key,
+                    'context_notes' => $translation->context_notes,
+                    'pronunciation_url' => null
+                ];
+
+                // Set language code if available
+                if ($translation->language && is_object($translation->language) && isset($translation->language->code)) {
+                    $translationData['language_code'] = $translation->language->code;
+                }
+
+                // Add pronunciation URL if available
+                if ($translation->hasMedia('pronunciation')) {
+                    $translationData['pronunciation_url'] = $translation->getFirstMediaUrl('pronunciation');
+                }
+
+                return $translationData;
+            })->values()->toArray();
+        }
+
+        return $data;
+    }
 }

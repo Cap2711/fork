@@ -66,12 +66,12 @@ class AdminSentenceController extends Controller
             'text' => 'required|string|max:1000',
             'pronunciation_key' => 'nullable|string',
             'metadata' => 'nullable|array',
-            'words' => 'required|array|min:1',
-            'words.*.word_id' => 'required|exists:words,id',
-            'words.*.position' => 'required|integer|min:0',
-            'translations' => 'array',
-            'translations.*.language_id' => 'required|exists:languages,id',
-            'translations.*.text' => 'required|string|max:1000',
+            'words' => 'nullable|array',
+            'words.*.word_id' => 'required_with:words|exists:words,id',
+            'words.*.position' => 'required_with:words|integer|min:0',
+            'translations' => 'nullable|array',
+            'translations.*.language_id' => 'required_with:translations|exists:languages,id',
+            'translations.*.text' => 'required_with:translations|string|max:1000',
             'translations.*.pronunciation_key' => 'nullable|string',
             'translations.*.context_notes' => 'nullable|string',
             'audio' => 'nullable|file|mimes:mp3,wav|max:10240',
@@ -86,11 +86,13 @@ class AdminSentenceController extends Controller
                 'metadata' => $validated['metadata'] ?? null
             ]);
 
-            // Add words with positions
-            foreach ($validated['words'] as $wordData) {
-                $sentence->words()->attach($wordData['word_id'], [
-                    'position' => $wordData['position']
-                ]);
+            // Add words with positions if provided
+            if (!empty($validated['words'])) {
+                foreach ($validated['words'] as $wordData) {
+                    $sentence->words()->attach($wordData['word_id'], [
+                        'position' => $wordData['position']
+                    ]);
+                }
             }
 
             // Add translations if provided
@@ -107,15 +109,11 @@ class AdminSentenceController extends Controller
 
             // Handle audio files
             if ($request->hasFile('audio')) {
-                $sentence->addMedia($request->file('audio'))
-                    ->usingFileName("{$sentence->id}_pronunciation.mp3")
-                    ->toMediaCollection('pronunciation');
+                $sentence->addAudioFile($request->file('audio'));
             }
 
             if ($request->hasFile('audio_slow')) {
-                $sentence->addMedia($request->file('audio_slow'))
-                    ->usingFileName("{$sentence->id}_pronunciation_slow.mp3")
-                    ->toMediaCollection('slow_pronunciation');
+                $sentence->addAudioFile($request->file('audio_slow'), true);
             }
 
             return $sentence;
@@ -128,6 +126,47 @@ class AdminSentenceController extends Controller
     }
 
     /**
+     * Update an existing sentence.
+     */
+    public function update(Request $request, Sentence $sentence)
+    {
+        $validated = $request->validate([
+            'text' => 'sometimes|required|string|max:1000',
+            'pronunciation_key' => 'nullable|string',
+            'metadata' => 'nullable|array',
+            'words' => 'nullable|array',
+            'words.*.word_id' => 'required_with:words|exists:words,id',
+            'words.*.position' => 'required_with:words|integer|min:0',
+        ]);
+
+        DB::transaction(function () use ($sentence, $validated, $request) {
+            $sentence->update([
+                'text' => $validated['text'] ?? $sentence->text,
+                'pronunciation_key' => $validated['pronunciation_key'] ?? $sentence->pronunciation_key,
+                'metadata' => $validated['metadata'] ?? $sentence->metadata,
+            ]);
+
+            // Update words if provided
+            if (!empty($validated['words'])) {
+                // Remove existing word associations
+                $sentence->words()->detach();
+                
+                // Add new word associations
+                foreach ($validated['words'] as $wordData) {
+                    $sentence->words()->attach($wordData['word_id'], [
+                        'position' => $wordData['position']
+                    ]);
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $sentence->getPreviewData()
+        ]);
+    }
+
+    /**
      * Update word timings in a sentence.
      */
     public function updateWordTimings(Request $request, Sentence $sentence)
@@ -137,9 +176,11 @@ class AdminSentenceController extends Controller
             'timings.*.word_id' => [
                 'required',
                 'integer',
-                Rule::exists('sentence_words', 'word_id')->where(function ($query) use ($sentence) {
-                    $query->where('sentence_id', $sentence->id);
-                })
+                function ($attribute, $value, $fail) use ($sentence) {
+                    if (!$sentence->words()->where('word_id', $value)->exists()) {
+                        $fail('The selected word_id is invalid for this sentence.');
+                    }
+                }
             ],
             'timings.*.start_time' => 'required|numeric|min:0',
             'timings.*.end_time' => 'required|numeric|gt:timings.*.start_time',
@@ -171,15 +212,13 @@ class AdminSentenceController extends Controller
             'audio' => 'required|file|mimes:mp3,wav|max:10240'
         ]);
 
-        $sentence->clearMediaCollection('pronunciation');
-        $sentence->addMedia($request->file('audio'))
-            ->usingFileName("{$sentence->id}_pronunciation.mp3")
-            ->toMediaCollection('pronunciation');
+        $sentence->clearMediaCollection('audio');
+        $media = $sentence->addAudioFile($request->file('audio'));
 
         return response()->json([
             'success' => true,
             'data' => [
-                'pronunciation_url' => $sentence->getPronunciationUrl(false)
+                'audio_url' => $media->getUrl()
             ]
         ]);
     }
@@ -193,15 +232,13 @@ class AdminSentenceController extends Controller
             'audio' => 'required|file|mimes:mp3,wav|max:10240'
         ]);
 
-        $sentence->clearMediaCollection('slow_pronunciation');
-        $sentence->addMedia($request->file('audio'))
-            ->usingFileName("{$sentence->id}_pronunciation_slow.mp3")
-            ->toMediaCollection('slow_pronunciation');
+        $sentence->clearMediaCollection('audio_slow');
+        $media = $sentence->addAudioFile($request->file('audio'), true);
 
         return response()->json([
             'success' => true,
             'data' => [
-                'pronunciation_url' => $sentence->getPronunciationUrl(true)
+                'audio_url' => $media->getUrl()
             ]
         ]);
     }
@@ -235,8 +272,8 @@ class AdminSentenceController extends Controller
 
             if ($request->hasFile('audio')) {
                 $translation->addMedia($request->file('audio'))
-                    ->usingFileName("{$sentence->id}_{$translation->id}_pronunciation.mp3")
-                    ->toMediaCollection('pronunciation');
+                    ->usingFileName("{$sentence->id}_{$translation->id}_audio.mp3")
+                    ->toMediaCollection('audio');
             }
 
             return $translation;
@@ -277,21 +314,22 @@ class AdminSentenceController extends Controller
     public function reorderWords(Request $request, Sentence $sentence)
     {
         $validated = $request->validate([
-            'order' => [
-                'required',
-                'array',
-                Rule::forEach(function () {
-                    return [
-                        'word_id' => 'required|integer',
-                        'position' => 'required|integer|min:0'
-                    ];
-                })
-            ]
+            'words' => 'required|array',
+            'words.*.id' => 'required|integer|exists:words,id',
+            'words.*.position' => 'required|integer|min:0'
         ]);
 
         DB::transaction(function () use ($sentence, $validated) {
-            foreach ($validated['order'] as $item) {
-                $sentence->words()->updateExistingPivot($item['word_id'], [
+            // First, set all positions to negative values to avoid unique constraint conflicts
+            foreach ($validated['words'] as $index => $item) {
+                $sentence->words()->updateExistingPivot($item['id'], [
+                    'position' => -($index + 1) // Temporary negative position
+                ]);
+            }
+            
+            // Then set the final positions
+            foreach ($validated['words'] as $item) {
+                $sentence->words()->updateExistingPivot($item['id'], [
                     'position' => $item['position']
                 ]);
             }

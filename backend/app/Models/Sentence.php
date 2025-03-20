@@ -88,4 +88,122 @@ class Sentence extends Model implements HasMedia
     {
         return $this->language?->code ?? 'unknown';
     }
+
+    /**
+     * Get preview data for the sentence.
+     */
+    public function getPreviewData(string $targetLanguageCode = null): array
+    {
+        $data = [
+            'id' => $this->id,
+            'language_id' => $this->language_id,
+            'text' => $this->text,
+            'pronunciation_key' => $this->pronunciation_key,
+            'metadata' => $this->metadata,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at
+        ];
+
+        // Add audio URLs if available
+        if ($this->hasMedia('audio')) {
+            $data['audio_url'] = $this->getFirstMediaUrl('audio');
+        }
+
+        if ($this->hasMedia('audio_slow')) {
+            $data['audio_slow_url'] = $this->getFirstMediaUrl('audio_slow');
+        }
+
+        // Add translations if they're loaded
+        if ($this->relationLoaded('translations')) {
+            $translations = $this->translations;
+            
+            if ($targetLanguageCode) {
+                $targetLanguage = Language::where('code', $targetLanguageCode)->first();
+                if ($targetLanguage) {
+                    $translation = $translations->where('language_id', $targetLanguage->id)->first();
+                    if ($translation) {
+                        $data['translation'] = $translation->text;
+                    }
+                }
+            }
+            
+            $data['translations'] = $translations->map(function ($translation) {
+                return [
+                    'id' => $translation->id,
+                    'language_id' => $translation->language_id,
+                    'text' => $translation->text,
+                    'pronunciation_key' => $translation->pronunciation_key,
+                    'context_notes' => $translation->context_notes
+                ];
+            });
+        }
+
+        // Add words if they're loaded
+        if ($this->relationLoaded('words')) {
+            $data['words'] = $this->words->map(function ($word) {
+                return [
+                    'id' => $word->id,
+                    'text' => $word->text,
+                    'position' => $word->pivot->position,
+                    'start_time' => $word->pivot->start_time,
+                    'end_time' => $word->pivot->end_time
+                ];
+            });
+        }
+
+        return $data;
+    }
+
+    /**
+     * Add audio file to the sentence, preventing duplicates.
+     *
+     * @param \Illuminate\Http\UploadedFile|string $file
+     * @param bool $isSlow Whether this is a slow version of the audio
+     * @param array $customProperties Additional properties to store
+     * @return \Spatie\MediaLibrary\MediaCollections\Models\Media
+     */
+    public function addAudioFile($file, bool $isSlow = false, array $customProperties = [])
+    {
+        $collection = $isSlow ? 'audio_slow' : 'audio';
+        
+        // Add language information to custom properties
+        if ($this->language && isset($this->language->code)) {
+            $customProperties['language_code'] = $this->language->code;
+        }
+        $customProperties['text'] = $this->text;
+        
+        // Use app's MediaService to add the file
+        return app(\App\Services\MediaService::class)->addMedia(
+            $this, 
+            $file, 
+            $collection, 
+            $customProperties
+        );
+    }
+
+    /**
+     * Get word timings for this sentence.
+     *
+     * @return array
+     */
+    public function getWordTimings(): array
+    {
+        return $this->words()
+            ->with('translations')
+            ->get()
+            ->map(function ($word) {
+                return [
+                    'id' => $word->id,
+                    'word_id' => $word->id,
+                    'text' => $word->text,
+                    'position' => $word->pivot->position,
+                    'start_time' => $word->pivot->start_time,
+                    'end_time' => $word->pivot->end_time,
+                    'metadata' => $word->pivot->metadata
+                ];
+            })
+            ->sortBy('position')
+            ->values()
+            ->toArray();
+    }
 }

@@ -68,4 +68,37 @@ class SentenceTranslation extends Model implements HasMedia
     {
         return $this->language?->code ?? 'unknown';
     }
+
+    /**
+     * Get preview data for the sentence translation.
+     */
+    public function getPreviewData(): array
+    {
+        $data = [
+            'id' => $this->id,
+            'sentence_id' => $this->sentence_id,
+            'language_id' => $this->language_id,
+            'text' => $this->text,
+            'pronunciation_key' => $this->pronunciation_key,
+            'context_notes' => $this->context_notes,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at
+        ];
+
+        // Add audio URL if available
+        if ($this->hasMedia('audio')) {
+            $data['audio_url'] = $this->getFirstMediaUrl('audio');
+        }
+
+        // Add language information if it's loaded
+        if ($this->relationLoaded('language')) {
+            $data['language'] = [
+                'id' => $this->language->id,
+                'code' => $this->language->code,
+                'name' => $this->language->name
+            ];
+        }
+
+        return $data;
+    }
 }

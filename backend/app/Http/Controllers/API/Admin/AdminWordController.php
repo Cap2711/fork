@@ -17,7 +17,7 @@ class AdminWordController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Word::with(['language', 'translations']);
+        $query = Word::with(['language', 'translations.language']);
 
         // Filter by language
         if ($request->has('language')) {
@@ -40,7 +40,7 @@ class AdminWordController extends Controller
         }
 
         $words = $query->paginate($request->per_page ?? 25);
-        $targetLanguage = $request->target_language ?? 'en';
+        $targetLanguage = $request->target_language ?? null;
 
         return response()->json([
             'success' => true,
@@ -128,9 +128,12 @@ class AdminWordController extends Controller
      */
     public function show(Word $word, Request $request)
     {
+        $word->load(['language', 'translations.language']);
+        $targetLanguage = $request->target_language ?? null;
+
         return response()->json([
             'success' => true,
-            'data' => $word->getPreviewData($request->target_language ?? 'en')
+            'data' => $word->getPreviewData($targetLanguage)
         ]);
     }
 
@@ -155,6 +158,7 @@ class AdminWordController extends Controller
         ]);
 
         $word->update($validated);
+        $word->load(['language', 'translations.language']);
 
         return response()->json([
             'success' => true,
@@ -201,6 +205,8 @@ class AdminWordController extends Controller
             return $translation;
         });
 
+        $translation->load('language');
+
         return response()->json([
             'success' => true,
             'data' => $translation->getPreviewData()
@@ -224,6 +230,7 @@ class AdminWordController extends Controller
         ]);
 
         $translation->update($validated);
+        $translation->load('language');
 
         return response()->json([
             'success' => true,
@@ -276,6 +283,22 @@ class AdminWordController extends Controller
             'data' => [
                 'pronunciation_url' => $translation->getPronunciationUrl()
             ]
+        ]);
+    }
+
+    /**
+     * Delete a word translation.
+     */
+    public function deleteTranslation(Word $word, WordTranslation $translation)
+    {
+        if ($translation->word_id !== $word->id) {
+            throw new AuthorizationException('This translation does not belong to the specified word.');
+        }
+
+        $translation->delete();
+
+        return response()->json([
+            'success' => true
         ]);
     }
 }

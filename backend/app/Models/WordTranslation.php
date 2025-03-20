@@ -77,4 +77,45 @@ class WordTranslation extends Model implements HasMedia
     {
         return $this->language?->code ?? 'unknown';
     }
+
+    /**
+     * Get the URL for the pronunciation audio.
+     */
+    public function getPronunciationUrl(): ?string
+    {
+        return $this->hasMedia('pronunciation') ? 
+            $this->getFirstMediaUrl('pronunciation') : null;
+    }
+
+    /**
+     * Get preview data for this translation.
+     */
+    public function getPreviewData(): array
+    {
+        $data = [
+            'id' => $this->id,
+            'word_id' => $this->word_id,
+            'language_id' => $this->language_id,
+            'language_code' => null,
+            'text' => $this->text,
+            'pronunciation_key' => $this->pronunciation_key,
+            'context_notes' => $this->context_notes,
+            'usage_examples' => $this->usage_examples,
+            'translation_order' => $this->translation_order,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at
+        ];
+
+        // Set language code if available
+        if ($this->language && is_object($this->language) && isset($this->language->code)) {
+            $data['language_code'] = $this->language->code;
+        }
+
+        // Add media URLs if available
+        if ($this->hasMedia('pronunciation')) {
+            $data['pronunciation_url'] = $this->getFirstMediaUrl('pronunciation');
+        }
+
+        return $data;
+    }
 }

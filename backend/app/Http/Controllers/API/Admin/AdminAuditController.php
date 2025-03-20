@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Log;
 
 class AdminAuditController extends BaseAPIController
 {
@@ -16,9 +17,19 @@ class AdminAuditController extends BaseAPIController
      */
     public function index(Request $request): JsonResponse
     {
-        $request->validate([
-            'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after_or_equal:start_date',
+        // Debug logging to see what's being passed
+        Log::debug('Audit log filter request data:', [
+            'raw_start_date' => $request->input('start_date'),
+            'raw_end_date' => $request->input('end_date'),
+            'all_parameters' => $request->all()
+        ]);
+
+        // Extract parameters first before validation
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        // Validate other parameters that aren't dates
+        $validatedData = $request->validate([
             'action' => 'nullable|string',
             'area' => 'nullable|string',
             'user_id' => 'nullable|integer|exists:users,id',
@@ -31,25 +42,46 @@ class AdminAuditController extends BaseAPIController
         $query = AuditLog::query()->with('user');
 
         // Apply date filters
-        if ($request->has('start_date')) {
-            $query->where('performed_at', '>=', $request->start_date);
+        if (!empty($startDate)) {
+            try {
+                $parsedStartDate = Carbon::parse($startDate)->startOfDay();
+                Log::debug('Parsed start date', ['original' => $startDate, 'parsed' => $parsedStartDate->toDateTimeString()]);
+                $query->where('performed_at', '>=', $parsedStartDate);
+            } catch (\Exception $e) {
+                Log::error("Error parsing start_date: " . $e->getMessage(), [
+                    'input' => $startDate,
+                    'exception' => $e->getMessage()
+                ]);
+                // Continue with the query without this filter
+            }
         }
-        if ($request->has('end_date')) {
-            $query->where('performed_at', '<=', $request->end_date);
+
+        if (!empty($endDate)) {
+            try {
+                $parsedEndDate = Carbon::parse($endDate)->endOfDay();
+                Log::debug('Parsed end date', ['original' => $endDate, 'parsed' => $parsedEndDate->toDateTimeString()]);
+                $query->where('performed_at', '<=', $parsedEndDate);
+            } catch (\Exception $e) {
+                Log::error("Error parsing end_date: " . $e->getMessage(), [
+                    'input' => $endDate,
+                    'exception' => $e->getMessage()
+                ]);
+                // Continue with the query without this filter
+            }
         }
 
         // Apply other filters
-        if ($request->has('action')) {
-            $query->where('action', $request->action);
+        if (!empty($validatedData['action'])) {
+            $query->where('action', $validatedData['action']);
         }
-        if ($request->has('area')) {
-            $query->where('area', $request->area);
+        if (!empty($validatedData['area'])) {
+            $query->where('area', $validatedData['area']);
         }
-        if ($request->has('user_id')) {
-            $query->where('user_id', $request->user_id);
+        if (!empty($validatedData['user_id'])) {
+            $query->where('user_id', $validatedData['user_id']);
         }
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+        if (!empty($validatedData['status'])) {
+            $query->where('status', $validatedData['status']);
         }
 
         // Apply sorting
@@ -136,31 +168,62 @@ class AdminAuditController extends BaseAPIController
      */
     public function export(Request $request)
     {
-        $request->validate([
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+        // Extract parameters first before validation
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        $validatedData = $request->validate([
             'format' => 'nullable|string|in:csv,json'
         ]);
 
-        $query = AuditLog::with('user')
-            ->whereBetween('performed_at', [
-                $request->start_date,
-                $request->end_date
-            ]);
+        $query = AuditLog::with('user');
 
-        if ($request->has('action')) {
-            $query->where('action', $request->action);
+        // Apply date filters
+        if (!empty($startDate)) {
+            try {
+                $parsedStartDate = Carbon::parse($startDate)->startOfDay();
+                Log::debug('Export - Parsed start date', ['original' => $startDate, 'parsed' => $parsedStartDate->toDateTimeString()]);
+                $query->where('performed_at', '>=', $parsedStartDate);
+            } catch (\Exception $e) {
+                Log::error("Export - Error parsing start_date: " . $e->getMessage(), [
+                    'input' => $startDate,
+                    'exception' => $e->getMessage()
+                ]);
+                return response()->json(['error' => 'Invalid start date format'], 400);
+            }
+        } else {
+            return response()->json(['error' => 'Start date is required for export'], 400);
         }
-        if ($request->has('area')) {
-            $query->where('area', $request->area);
+
+        if (!empty($endDate)) {
+            try {
+                $parsedEndDate = Carbon::parse($endDate)->endOfDay();
+                Log::debug('Export - Parsed end date', ['original' => $endDate, 'parsed' => $parsedEndDate->toDateTimeString()]);
+                $query->where('performed_at', '<=', $parsedEndDate);
+            } catch (\Exception $e) {
+                Log::error("Export - Error parsing end_date: " . $e->getMessage(), [
+                    'input' => $endDate,
+                    'exception' => $e->getMessage()
+                ]);
+                return response()->json(['error' => 'Invalid end date format'], 400);
+            }
+        } else {
+            return response()->json(['error' => 'End date is required for export'], 400);
         }
-        if ($request->has('user_id')) {
-            $query->where('user_id', $request->user_id);
+
+        if (!empty($validatedData['action'])) {
+            $query->where('action', $validatedData['action']);
+        }
+        if (!empty($validatedData['area'])) {
+            $query->where('area', $validatedData['area']);
+        }
+        if (!empty($validatedData['user_id'])) {
+            $query->where('user_id', $validatedData['user_id']);
         }
 
         $logs = $query->orderBy('performed_at')->get();
 
-        $format = $request->input('format', 'csv');
+        $format = $validatedData['format'] ?? 'csv';
 
         if ($format === 'json') {
             return $this->sendResponse($logs);
@@ -169,13 +232,12 @@ class AdminAuditController extends BaseAPIController
         // Generate CSV
         $headers = [
             'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="audit_logs_' . 
-                Carbon::now()->format('Y-m-d_His') . '.csv"'
+            'Content-Disposition' => 'attachment; filename=audit-logs.csv'
         ];
 
-        $callback = function() use ($logs) {
+        $callback = function () use ($logs) {
             $file = fopen('php://output', 'w');
-            
+
             // Add headers
             fputcsv($file, [
                 'ID',
@@ -200,14 +262,14 @@ class AdminAuditController extends BaseAPIController
                     $log->ip_address,
                     $log->user_agent,
                     $log->performed_at,
-                    $log->getDescription()
+                    json_encode($log->changes)
                 ]);
             }
 
             fclose($file);
         };
 
-        return Response::stream($callback, 200, $headers);
+        return response()->stream($callback, 200, $headers);
     }
 
     /**

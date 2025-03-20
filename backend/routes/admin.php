@@ -160,6 +160,7 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(functi
 
     // Audit Logs
     Route::get('audit-logs', [AdminAuditController::class, 'index']);
+    Route::get('audit-logs/export', [AdminAuditController::class, 'export']);
     Route::get('audit-logs/{log}', [AdminAuditController::class, 'show']);
 
     // Gamification Management

@@ -11,6 +11,7 @@ class SentenceWord extends Pivot
     use HasFactory, HasAuditLog, HasVersions;
 
     public $incrementing = true;
+    protected $table = 'sentence_words';
 
     protected $fillable = [
         'sentence_id',
