@@ -5,9 +5,11 @@ namespace App\Http\Controllers\API\Admin;
 use App\Http\Controllers\API\BaseAPIController;
 use App\Models\Role;
 use App\Models\Permission;
+use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class AdminRoleController extends BaseAPIController
@@ -17,27 +19,34 @@ class AdminRoleController extends BaseAPIController
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Role::query();
+        try {
+            $query = Role::query();
 
-        // Filter system/custom roles
-        if ($request->has('system')) {
-            $query->where('is_system', $request->boolean('system'));
+            // Filter system/custom roles
+            if ($request->has('system')) {
+                $query->where('is_system', $request->boolean('system'));
+            }
+
+            // Search by name
+            if ($request->has('search')) {
+                $search = $request->input('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            }
+
+            $roles = $query->with('permissions')
+                ->orderBy('name')
+                ->paginate($request->input('per_page', 15));
+
+            return $this->sendPaginatedResponse($roles);
+        } catch (Exception $e) {
+            Log::error('Failed to fetch roles: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->sendError('Failed to fetch roles', [], 500);
         }
-
-        // Search by name
-        if ($request->has('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            });
-        }
-
-        $roles = $query->with('permissions')
-            ->orderBy('name')
-            ->paginate($request->input('per_page', 15));
-
-        return $this->sendPaginatedResponse($roles);
     }
 
     /**
@@ -45,14 +54,16 @@ class AdminRoleController extends BaseAPIController
      */
     public function store(Request $request): JsonResponse
     {
-        $request->validate([
-            'name' => 'required|string|max:255|unique:roles,name',
-            'description' => 'nullable|string',
-            'permissions' => 'array',
-            'permissions.*' => 'exists:permissions,id'
-        ]);
+        try {
+            $request->validate([
+                'name' => 'required|string|max:255|unique:roles,name',
+                'description' => 'nullable|string',
+                'permissions' => 'array',
+                'permissions.*' => 'exists:permissions,id'
+            ]);
 
-        return DB::transaction(function () use ($request) {
+            DB::beginTransaction();
+            
             $role = Role::create([
                 'name' => $request->name,
                 'slug' => Str::slug($request->name),
@@ -65,8 +76,17 @@ class AdminRoleController extends BaseAPIController
             }
 
             $role->load('permissions');
+            
+            DB::commit();
             return $this->sendCreatedResponse($role);
-        });
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to create role: ' . $e->getMessage(), [
+                'data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->sendError('Failed to create role: ' . $e->getMessage(), [], 500);
+        }
     }
 
     /**
@@ -74,8 +94,16 @@ class AdminRoleController extends BaseAPIController
      */
     public function show(Role $role): JsonResponse
     {
-        $role->load(['permissions', 'users']);
-        return $this->sendResponse($role);
+        try {
+            $role->load(['permissions', 'users']);
+            return $this->sendResponse($role);
+        } catch (Exception $e) {
+            Log::error('Failed to show role: ' . $e->getMessage(), [
+                'role_id' => $role->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->sendError('Failed to show role', [], 500);
+        }
     }
 
     /**
@@ -83,22 +111,35 @@ class AdminRoleController extends BaseAPIController
      */
     public function update(Request $request, Role $role): JsonResponse
     {
-        if ($role->is_system) {
-            return $this->sendError('System roles cannot be modified.',['error' => 'System roles cannot be modified.'], 403);
+        try {
+            if ($role->is_system) {
+                return $this->sendError('System roles cannot be modified.',['error' => 'System roles cannot be modified.'], 403);
+            }
+
+            $request->validate([
+                'name' => "required|string|max:255|unique:roles,name,{$role->id}",
+                'description' => 'nullable|string'
+            ]);
+
+            DB::beginTransaction();
+            
+            $role->update([
+                'name' => $request->name,
+                'slug' => Str::slug($request->name),
+                'description' => $request->description
+            ]);
+            
+            DB::commit();
+            return $this->sendResponse($role);
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to update role: ' . $e->getMessage(), [
+                'role_id' => $role->id,
+                'data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->sendError('Failed to update role: ' . $e->getMessage(), [], 500);
         }
-
-        $request->validate([
-            'name' => "required|string|max:255|unique:roles,name,{$role->id}",
-            'description' => 'nullable|string'
-        ]);
-
-        $role->update([
-            'name' => $request->name,
-            'slug' => Str::slug($request->name),
-            'description' => $request->description
-        ]);
-
-        return $this->sendResponse($role);
     }
 
     /**
@@ -106,16 +147,28 @@ class AdminRoleController extends BaseAPIController
      */
     public function destroy(Role $role): JsonResponse
     {
-        if ($role->is_system) {
-            return $this->sendError('System roles cannot be deleted.', ['error' => 'System roles cannot be deleted.'], 403);
-        }
+        try {
+            if ($role->is_system) {
+                return $this->sendError('System roles cannot be deleted.', ['error' => 'System roles cannot be deleted.'], 403);
+            }
 
-        if ($role->users()->exists()) {
-            return $this->sendError('Cannot delete role with assigned users.', ['error' => 'Cannot delete role with assigned users.'], 409);
-        }
+            if ($role->users()->exists()) {
+                return $this->sendError('Cannot delete role with assigned users.', ['error' => 'Cannot delete role with assigned users.'], 409);
+            }
 
-        $role->delete();
-        return $this->sendNoContentResponse();
+            DB::beginTransaction();
+            $role->delete();
+            DB::commit();
+            
+            return $this->sendNoContentResponse();
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to delete role: ' . $e->getMessage(), [
+                'role_id' => $role->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->sendError('Failed to delete role: ' . $e->getMessage(), [], 500);
+        }
     }
 
     /**
@@ -123,18 +176,20 @@ class AdminRoleController extends BaseAPIController
      */
     public function updatePermissions(Request $request, Role $role): JsonResponse
     {
-        if ($role->is_system) {
-            return $this->sendError('System role permissions cannot be modified.', ['error' => 'System role permissions cannot be modified.'], 403);
-        }
+        try {
+            if ($role->is_system) {
+                return $this->sendError('System role permissions cannot be modified.', ['error' => 'System role permissions cannot be modified.'], 403);
+            }
 
-        $request->validate([
-            'permissions' => 'required|array',
-            'permissions.*.id' => 'required|exists:permissions,id',
-            'permissions.*.granted' => 'required|boolean',
-            'permissions.*.conditions' => 'nullable|array'
-        ]);
+            $request->validate([
+                'permissions' => 'required|array',
+                'permissions.*.id' => 'required|exists:permissions,id',
+                'permissions.*.granted' => 'required|boolean',
+                'permissions.*.conditions' => 'nullable|array'
+            ]);
 
-        return DB::transaction(function () use ($request, $role) {
+            DB::beginTransaction();
+            
             // Clear existing permissions
             $role->permissions()->detach();
 
@@ -149,8 +204,18 @@ class AdminRoleController extends BaseAPIController
             }
 
             $role->load('permissions');
+            
+            DB::commit();
             return $this->sendResponse($role);
-        });
+        } catch (Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to update role permissions: ' . $e->getMessage(), [
+                'role_id' => $role->id,
+                'data' => $request->all(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->sendError('Failed to update role permissions: ' . $e->getMessage(), [], 500);
+        }
     }
 
     /**
@@ -158,22 +223,29 @@ class AdminRoleController extends BaseAPIController
      */
     public function getAvailablePermissions(): JsonResponse
     {
-        $permissions = Permission::all()
-            ->groupBy('group')
-            ->map(function ($group) {
-                return $group->map(function ($permission) {
-                    return [
-                        'id' => $permission->id,
-                        'name' => $permission->name,
-                        'slug' => $permission->slug,
-                        'description' => $permission->description,
-                        'is_system' => $permission->is_system,
-                        'conditions' => $permission->conditions
-                    ];
+        try {
+            $permissions = Permission::all()
+                ->groupBy('group')
+                ->map(function ($group) {
+                    return $group->map(function ($permission) {
+                        return [
+                            'id' => $permission->id,
+                            'name' => $permission->name,
+                            'slug' => $permission->slug,
+                            'description' => $permission->description,
+                            'is_system' => $permission->is_system,
+                            'conditions' => $permission->conditions
+                        ];
+                    });
                 });
-            });
 
-        return $this->sendResponse($permissions);
+            return $this->sendResponse($permissions);
+        } catch (Exception $e) {
+            Log::error('Failed to fetch available permissions: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->sendError('Failed to fetch available permissions', [], 500);
+        }
     }
 
     /**
@@ -181,25 +253,32 @@ class AdminRoleController extends BaseAPIController
      */
     public function statistics(): JsonResponse
     {
-        $stats = [
-            'total_roles' => Role::count(),
-            'system_roles' => Role::where('is_system', true)->count(),
-            'custom_roles' => Role::where('is_system', false)->count(),
-            'roles_with_users' => Role::whereHas('users')->count(),
-            'permissions_per_role' => DB::table('permission_role')
-                ->selectRaw('role_id, COUNT(*) as count')
-                ->groupBy('role_id')
-                ->get()
-                ->avg('count') ?? 0,
-            'most_used_permissions' => DB::table('permission_role')
-                ->join('permissions', 'permissions.id', '=', 'permission_role.permission_id')
-                ->selectRaw('permissions.name, COUNT(*) as usage_count')
-                ->groupBy('permissions.id', 'permissions.name')
-                ->orderByDesc('usage_count')
-                ->limit(5)
-                ->get()
-        ];
+        try {
+            $stats = [
+                'total_roles' => Role::count(),
+                'system_roles' => Role::where('is_system', true)->count(),
+                'custom_roles' => Role::where('is_system', false)->count(),
+                'roles_with_users' => Role::whereHas('users')->count(),
+                'permissions_per_role' => DB::table('permission_role')
+                    ->selectRaw('role_id, COUNT(*) as count')
+                    ->groupBy('role_id')
+                    ->get()
+                    ->avg('count') ?? 0,
+                'most_used_permissions' => DB::table('permission_role')
+                    ->join('permissions', 'permissions.id', '=', 'permission_role.permission_id')
+                    ->selectRaw('permissions.name, COUNT(*) as usage_count')
+                    ->groupBy('permissions.id', 'permissions.name')
+                    ->orderByDesc('usage_count')
+                    ->limit(5)
+                    ->get()
+            ];
 
-        return $this->sendResponse($stats);
+            return $this->sendResponse($stats);
+        } catch (Exception $e) {
+            Log::error('Failed to fetch role statistics: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->sendError('Failed to fetch role statistics', [], 500);
+        }
     }
 }
