@@ -17,17 +17,22 @@ class Quiz extends Model
     const AUDIT_AREA = 'quizzes';
 
     protected $fillable = [
-        'unit_id',
+        'lesson_id',
+        'section_id',
         'title',
+        'slug',
+        'description',
+        'type',
         'passing_score',
-        'status',
-        'review_status'
+        'time_limit',
+        'difficulty_level',
+        'is_published'
     ];
 
     protected $casts = [
         'passing_score' => 'integer',
-        'status' => 'string',
-        'review_status' => 'string'
+        'time_limit' => 'integer',
+        'is_published' => 'boolean'
     ];
 
     /**

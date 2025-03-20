@@ -20,6 +20,9 @@ class Section extends Model
     protected $fillable = [
         'lesson_id',
         'title',
+        'slug',
+        'description',
+        'type',
         'content',
         'order',
         'status',

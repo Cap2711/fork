@@ -82,7 +82,8 @@ class AdminInviteTest extends AdminTestCase
             'role' => 'teacher',
             'token' => 'test-token',
             'status' => 'pending',
-            'invited_by' => $this->admin->id
+            'invited_by' => $this->admin->id,
+            'expires_at' => now()->addDays(7)
         ]);
 
         $response = $this->actingAsAdmin()
@@ -107,7 +108,8 @@ class AdminInviteTest extends AdminTestCase
             'role' => 'teacher',
             'token' => 'test-token',
             'status' => 'accepted',
-            'invited_by' => $this->admin->id
+            'invited_by' => $this->admin->id,
+            'expires_at' => now()->addDays(7)
         ]);
 
         $response = $this->actingAsAdmin()
@@ -150,7 +152,8 @@ class AdminInviteTest extends AdminTestCase
             'role' => 'teacher',
             'token' => 'test-token',
             'status' => 'pending',
-            'invited_by' => $this->admin->id
+            'invited_by' => $this->admin->id,
+            'expires_at' => now()->addDays(7)
         ]);
 
         $response = $this->actingAsAdmin()

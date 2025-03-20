@@ -31,7 +31,7 @@ class AdminInvitation extends Mailable
             ->with([
                 'inviteUrl' => config('app.url') . '/admin/accept-invite?token=' . $this->invite->token,
                 'role' => $this->invite->role,
-                'expiresAt' => $this->invite->created_at->addDays(7),
+                'expiresAt' => $this->invite->expires_at,
                 'invitedBy' => $this->invite->inviter->name
             ]);
     }

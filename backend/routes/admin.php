@@ -31,6 +31,11 @@ use App\Http\Controllers\API\Admin\{
 Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // Dashboard & Analytics
     Route::get('dashboard', [AdminDashboardController::class, 'index']);
+    Route::get('dashboard/engagement', [AdminDashboardController::class, 'engagement']);
+    Route::get('dashboard/progress', [AdminDashboardController::class, 'progress']);
+    Route::get('dashboard/achievements', [AdminDashboardController::class, 'achievements']);
+    Route::get('dashboard/leaderboards', [AdminDashboardController::class, 'leaderboards']);
+    Route::get('dashboard/content-health', [AdminDashboardController::class, 'contentHealth']);
     Route::get('analytics', [AdminAnalyticsController::class, 'index']);
 
     // Language Management
@@ -152,6 +157,7 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(functi
     Route::prefix('users')->group(function () {
         Route::post('invite', [AdminInviteController::class, 'send']);
         Route::delete('invite/{invite}', [AdminInviteController::class, 'cancel']);
+        Route::post('invite/{invite}/resend', [AdminInviteController::class, 'resend']);
     });
 
     // Roles & Permissions

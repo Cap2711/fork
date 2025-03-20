@@ -43,7 +43,7 @@ class Achievement extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'user_achievements')
-            ->withTimestamp('earned_at');
+            ->withTimestamps('earned_at');
     }
 
     /**
