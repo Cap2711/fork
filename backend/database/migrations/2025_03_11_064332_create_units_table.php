@@ -14,6 +14,7 @@ return new class extends Migration
                 ->constrained()
                 ->onDelete('cascade');
             $table->string('title');
+            $table->enum('status', ['draft', 'published', 'archived'])->default('draft');
             $table->text('description');
             $table->integer('order');
             $table->timestamps();

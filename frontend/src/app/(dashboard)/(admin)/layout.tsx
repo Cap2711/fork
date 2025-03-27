@@ -1,105 +1,34 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu } from "lucide-react";
+import { useState } from 'react';
+import AdminSidebar from '@/components/admin/AdminSidebar';
+import AdminTopbar from '@/components/admin/AdminTopbar';
 
-interface LayoutProps {
-  children: ReactNode;
+interface AdminLayoutProps {
+  children: React.ReactNode;
 }
 
-export default function AdminDashboardLayout({ children }: LayoutProps) {
-  const router = useRouter();
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-    }
-    setIsMobile(window.innerWidth < 768);
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [router]);
-
-  const NavContent = () => (
-    <nav className="space-y-2">
-      <Button variant="ghost" className="justify-start w-full" asChild>
-        <Link href="/learn">Learning Dashboard</Link>
-      </Button>
-      <Button variant="ghost" className="justify-start w-full" asChild>
-        <Link href="/admin">Admin Panel</Link>
-      </Button>
-      <Button variant="ghost" className="justify-start w-full" asChild>
-        <Link href="/profile">Profile</Link>
-      </Button>
-    </nav>
-  );
+export default function AdminLayout({ children }: AdminLayoutProps) {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Mobile Navigation */}
-      {isMobile && (
-        <header className="flex items-center h-16 px-4 border-b">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden">
-                <Menu className="w-5 h-5" />
-                <span className="sr-only">Toggle navigation menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64">
-              <div className="mt-6">
-                <NavContent />
-              </div>
-            </SheetContent>
-          </Sheet>
-          <div className="flex-1" />
-          <Button
-            variant="ghost"
-            onClick={() => {
-              localStorage.removeItem("token");
-              router.push("/login");
-            }}
-          >
-            Sign Out
-          </Button>
-        </header>
-      )}
-
-      <div className="flex">
-        {/* Desktop Navigation */}
-        {!isMobile && (
-          <div className="w-64 min-h-screen p-4 border-r">
-            <NavContent />
-          </div>
-        )}
-
-        {/* Main Content */}
-        <main className="flex-1">
-          {!isMobile && (
-            <header className="px-8 py-4 border-b">
-              <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-semibold">Dashboard</h1>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    localStorage.removeItem("token");
-                    router.push("/login");
-                  }}
-                >
-                  Sign Out
-                </Button>
-              </div>
-            </header>
-          )}
-          <div className="p-8">{children}</div>
-        </main>
+    <div className="min-h-screen">
+      <div className="fixed inset-y-0 z-50 hidden h-full w-72 flex-col md:flex">
+        <AdminSidebar />
+      </div>
+      <div
+        className={`fixed top-0 z-50 w-full flex-col md:pl-72 ${
+          isSidebarCollapsed ? 'md:pl-20' : 'md:pl-72'
+        }`}
+      >
+        <AdminTopbar onToggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
+      </div>
+      <div
+        className={`pb-20 pt-16 min-h-screen ${
+          isSidebarCollapsed ? 'md:pl-20' : 'md:pl-72'
+        }`}
+      >
+        <div className="container py-6">{children}</div>
       </div>
     </div>
   );

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class XpHistory extends Model
 {
+    protected $table = 'xp_history';
+
     protected $fillable = [
         'user_id',
         'amount',

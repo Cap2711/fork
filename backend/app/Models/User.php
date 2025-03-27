@@ -4,13 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
         'name',
@@ -19,9 +20,6 @@ class User extends Authenticatable
         'role',
         'google_id',
         'avatar',
-        'current_streak',
-        'longest_streak',
-        'last_activity_date',
         'total_points',
     ];
 
@@ -34,10 +32,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
-        'current_streak' => 'integer',
-        'longest_streak' => 'integer',
         'total_points' => 'integer',
-        'last_activity_date' => 'datetime',
     ];
 
     /**
@@ -59,32 +54,33 @@ class User extends Authenticatable
             ->first();
     }
 
-    // Streak Management
-    public function updateStreak(): void
+    /**
+     * Get the user's streak information.
+     */
+    public function streak(): HasMany
     {
-        $today = now()->startOfDay();
-        $lastActivity = $this->last_activity_date?->startOfDay();
-
-        // If this is the first activity or it's been more than a day
-        if (!$lastActivity || $lastActivity->diffInDays($today) > 1) {
-            $this->current_streak = 1;
-        } 
-        // If the last activity was yesterday
-        elseif ($lastActivity->diffInDays($today) === 1) {
-            $this->current_streak++;
-        }
-        // If it's the same day, don't update the streak
-
-        // Update longest streak if current is higher
-        if ($this->current_streak > $this->longest_streak) {
-            $this->longest_streak = $this->current_streak;
-        }
-
-        $this->last_activity_date = $today;
-        $this->save();
+        return $this->hasMany(UserStreak::class);
     }
 
-    // XP Management
+    /**
+     * Get the user's XP history.
+     */
+    public function xpHistory(): HasMany
+    {
+        return $this->hasMany(XpHistory::class);
+    }
+
+    /**
+     * Get the roles that belong to the user.
+     */
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    /**
+     * XP Management
+     */
     public function awardXp(int $amount, string $source, ?int $lessonId = null): void
     {
         $this->total_points += $amount;
@@ -96,14 +92,6 @@ class User extends Authenticatable
             'source' => $source,
             'lesson_id' => $lessonId,
         ]);
-
-        // Update streak
-        $this->updateStreak();
-    }
-
-    public function xpHistory(): HasMany
-    {
-        return $this->hasMany(XpHistory::class);
     }
 
     // Progress Summary
@@ -135,8 +123,6 @@ class User extends Authenticatable
         return [
             'completed_lessons' => $completedLessons,
             'total_points' => $this->total_points,
-            'current_streak' => $this->current_streak,
-            'longest_streak' => $this->longest_streak,
             'completed_units' => $completedUnits,
             'total_units' => $totalUnits,
             'vocabulary_mastered' => $vocabularyMastered,
@@ -144,9 +130,19 @@ class User extends Authenticatable
         ];
     }
 
-    // Admin Role Check
+    /**
+     * Check if user has a specific role.
+     */
+    public function hasRole(string $role): bool
+    {
+        return $this->roles()->where('slug', $role)->exists();
+    }
+
+    /**
+     * Admin Role Check
+     */
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return $this->hasRole('admin');
     }
 }

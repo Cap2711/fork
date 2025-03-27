@@ -1,29 +1,39 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { handleOAuthResponse } from '@/app/_actions/auth-actions';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { handleGoogleCallback } from '@/app/_actions/auth-actions';
+import { toast } from 'sonner';
 
 export default function GoogleCallbackPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Handle the OAuth callback
-    const completeAuth = async () => {
-      if (typeof window !== 'undefined') {
-        await handleOAuthResponse(window.location.href);
+    const handleCallback = async () => {
+      try {
+        const code = searchParams.get('code');
+        if (!code) {
+          toast.error('Authentication failed', {
+            description: 'No authorization code found',
+          });
+          router.push('/login');
+          return;
+        }
+
+        const redirectPath = await handleGoogleCallback(code);
+        router.push(redirectPath);
+      } catch {
+        toast.error('Authentication failed', {
+          description: 'Could not complete sign in with Google',
+        });
+        router.push('/login');
       }
     };
 
-    completeAuth();
-  }, [router]);
+    handleCallback();
+  }, [router, searchParams]);
 
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <h2 className="mb-4 text-xl">Completing authentication...</h2>
-        <div className="w-16 h-16 border-t-4 border-[var(--duo-blue)] border-solid rounded-full animate-spin mx-auto"></div>
-      </div>
-    </div>
-  );
+  // No need for complex UI, this is just a transition page
+  return null;
 }

@@ -1,141 +1,118 @@
 'use server';
 
-import axiosInstance, { ApiResponse } from '@/lib/axios';
+import { revalidatePath } from 'next/cache';
+import axiosInstance from '@/lib/axios';
+import { Lesson } from '@/types/lesson';
+import { Section } from '@/types/section';
+import { Quiz } from '@/types/quiz';
 
-export interface LessonData {
-    title: string;
-    description: string;
-    type: 'mixed' | 'vocabulary' | 'grammar' | 'reading';
-    order: number;
-    xp_reward: number;
+interface APIResponse {
+  id: number;
+  unit_id: number;
+  title: string;
+  description: string;
+  slug?: string;
+  order: number;
+  is_published: boolean;
+  estimated_time?: number;
+  xp_reward?: number;
+  difficulty_level: string;
+  sections: Section[];
+  assessment_quiz?: Quiz;
+  created_at: string;
+  updated_at: string;
 }
 
-export type LessonUpdateData = Partial<LessonData>;
-
-export interface LessonStats {
-    total_attempts: number;
-    completion_count: number;
-    completion_rate: number;
-    average_score: number;
-    average_completion_time: number;
-    exercises_count: number;
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error && 'message' in error) {
+    return String(error.message);
+  }
+  return 'An unexpected error occurred';
 }
 
-export interface LessonExercise {
-    id: number;
-    exercise_type: string;
-    prompt: string;
-    order: number;
-    xp_reward: number;
+function transformAPIResponse(data: APIResponse): Lesson {
+  return {
+    ...data,
+    slug: data.slug || `lesson-${data.id}`,
+    estimated_time: data.estimated_time || 0,
+    xp_reward: data.xp_reward || 0,
+    sections: data.sections || [],
+    assessment_quiz: data.assessment_quiz
+  };
 }
 
-export interface LessonResponse extends LessonData {
-    id: number;
-    unit_id: number;
-    exercises: LessonExercise[];
-    stats: LessonStats;
+export async function createLesson(formData: FormData) {
+  try {
+    const response = await axiosInstance.post<APIResponse>('/api/admin/lessons', formData);
+    revalidatePath('/admin/units/[id]', 'page');
+    revalidatePath('/admin/lessons', 'page');
+    return { data: transformAPIResponse(response.data) };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
 }
 
-export async function listLessons(
-    unitId: number
-): Promise<ApiResponse<{ lessons: LessonResponse[] }>> {
-    try {
-        const response = await axiosInstance.get<ApiResponse<{ lessons: LessonResponse[] }>>(
-            `/admin/units/${unitId}/lessons`
-        );
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching lessons:', error);
-        throw error;
-    }
+export async function updateLesson(id: number, formData: FormData) {
+  try {
+    const response = await axiosInstance.put<APIResponse>(`/api/admin/lessons/${id}`, formData);
+    revalidatePath('/admin/units/[id]', 'page');
+    revalidatePath('/admin/lessons/[id]', 'page');
+    return { data: transformAPIResponse(response.data) };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
 }
 
-export async function getLessonStats(
-    lessonId: number
-): Promise<ApiResponse<{ stats: LessonStats }>> {
-    try {
-        const response = await axiosInstance.get<ApiResponse<{ stats: LessonStats }>>(
-            `/admin/lessons/${lessonId}`
-        );
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching lesson stats:', error);
-        throw error;
-    }
+export async function deleteLesson(id: number) {
+  try {
+    await axiosInstance.delete(`/api/admin/lessons/${id}`);
+    revalidatePath('/admin/units/[id]', 'page');
+    revalidatePath('/admin/lessons', 'page');
+    return { success: true };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
 }
 
-export async function createLesson(
-    unitId: number,
-    data: LessonData
-): Promise<ApiResponse<{ lesson: LessonResponse }>> {
-    try {
-        const response = await axiosInstance.post<ApiResponse<{ lesson: LessonResponse }>>(
-            `/admin/units/${unitId}/lessons`,
-            data
-        );
-        return response.data;
-    } catch (error) {
-        console.error('Error creating lesson:', error);
-        throw error;
-    }
+export async function getLesson(id: number) {
+  try {
+    const response = await axiosInstance.get<APIResponse>(`/api/admin/lessons/${id}`);
+    return { data: transformAPIResponse(response.data) };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
 }
 
-export async function updateLesson(
-    lessonId: number,
-    data: LessonUpdateData
-): Promise<ApiResponse<{ lesson: LessonResponse }>> {
-    try {
-        const response = await axiosInstance.put<ApiResponse<{ lesson: LessonResponse }>>(
-            `/admin/lessons/${lessonId}`,
-            data
-        );
-        return response.data;
-    } catch (error) {
-        console.error('Error updating lesson:', error);
-        throw error;
-    }
+export async function getLessons(unitId?: number) {
+  try {
+    const url = unitId 
+      ? `/api/admin/units/${unitId}/lessons`
+      : '/api/admin/lessons';
+    const response = await axiosInstance.get<APIResponse[]>(url);
+    return { data: response.data.map(transformAPIResponse) };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
 }
 
-export async function deleteLesson(
-    lessonId: number
-): Promise<ApiResponse<{ message: string }>> {
-    try {
-        const response = await axiosInstance.delete<ApiResponse<{ message: string }>>(
-            `/admin/lessons/${lessonId}`
-        );
-        return response.data;
-    } catch (error) {
-        console.error('Error deleting lesson:', error);
-        throw error;
-    }
+export async function updateLessonOrder(id: number, order: number) {
+  try {
+    const response = await axiosInstance.patch<APIResponse>(`/api/admin/lessons/${id}/order`, { order });
+    revalidatePath('/admin/units/[id]', 'page');
+    return { data: transformAPIResponse(response.data) };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
 }
 
-export async function cloneLesson(
-    lessonId: number
-): Promise<ApiResponse<{ lesson: LessonResponse }>> {
-    try {
-        const response = await axiosInstance.post<ApiResponse<{ lesson: LessonResponse }>>(
-            `/admin/lessons/${lessonId}/clone`
-        );
-        return response.data;
-    } catch (error) {
-        console.error('Error cloning lesson:', error);
-        throw error;
-    }
-}
-
-export async function reorderLessons(
-    unitId: number,
-    lessonOrders: { id: number; order: number }[]
-): Promise<ApiResponse<{ lessons: LessonResponse[] }>> {
-    try {
-        const response = await axiosInstance.put<ApiResponse<{ lessons: LessonResponse[] }>>(
-            `/admin/units/${unitId}/lessons/reorder`,
-            { lessons: lessonOrders }
-        );
-        return response.data;
-    } catch (error) {
-        console.error('Error reordering lessons:', error);
-        throw error;
-    }
+export async function toggleLessonPublished(id: number) {
+  try {
+    const response = await axiosInstance.patch<APIResponse>(`/api/admin/lessons/${id}/toggle-published`);
+    revalidatePath('/admin/units/[id]', 'page');
+    revalidatePath('/admin/lessons/[id]', 'page');
+    return { data: transformAPIResponse(response.data) };
+  } catch (error) {
+    return { error: getErrorMessage(error) };
+  }
 }

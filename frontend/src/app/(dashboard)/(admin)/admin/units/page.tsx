@@ -1,174 +1,167 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import { LoadingGrid } from "@/components/ui/loading";
-import { useToast } from "@/components/ui/toast";
+import { Card } from "@/components/ui/card";
 import { useEffect, useState } from "react";
-import { listUnits, UnitResponse } from "@/app/_actions/admin/unit-actions";
+import { getUnits, deleteUnit, toggleUnitStatus } from "@/app/_actions/admin/unit-actions";
 import { useRouter } from "next/navigation";
+import { AlertDialog } from "@/components/admin/AlertDialog";
+import Link from "next/link";
+import { toast } from "sonner";
+
+interface Unit {
+  id: number;
+  title: string;
+  description: string;
+  order: number;
+  estimated_duration: number;
+  is_published: boolean;
+  learning_path_id: number;
+}
 
 export default function UnitsPage() {
-    const router = useRouter();
-    const toast = useToast();
-    const [units, setUnits] = useState<UnitResponse[]>([]);
-    const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        loadUnits();
-    }, []);
+  useEffect(() => {
+    loadUnits();
+  }, []);
 
-    async function loadUnits() {
-        try {
-            setLoading(true);
-            const response = await listUnits();
-            setUnits(response.data.units);
-        } catch (error) {
-            toast.showToast("Failed to load units", "error");
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
+  const loadUnits = async () => {
+    const result = await getUnits();
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setUnits(result.data || []);
     }
+    setLoading(false);
+  };
 
+  const handleToggleStatus = async (id: number) => {
+    const result = await toggleUnitStatus(id);
+    if (result.error) {
+      toast.error("Error", {
+        description: result.error,
+      });
+    } else {
+      setUnits(units.map(unit => 
+        unit.id === id ? { ...unit, is_published: !unit.is_published } : unit
+      ));
+      toast.success("Success", {
+        description: "Unit status updated successfully",
+      });
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    const result = await deleteUnit(id);
+    if (result.error) {
+      toast.error("Error", {
+        description: result.error,
+      });
+    } else {
+      setUnits(units.filter(unit => unit.id !== id));
+      toast.success("Success", {
+        description: "Unit deleted successfully",
+      });
+      router.refresh();
+    }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-48">Loading...</div>;
+  }
+
+  if (error) {
     return (
-        <div className="container mx-auto py-6">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold">Course Units</h1>
-                    <p className="text-muted-foreground mt-1">
-                        Manage your learning units and their content
-                    </p>
-                </div>
-                <Button 
-                    onClick={() => router.push("/admin/units/new")}
-                    className="flex items-center gap-2"
-                >
-                    <PlusIcon className="h-4 w-4" />
-                    Create New Unit
-                </Button>
-            </div>
+      <div className="text-red-500 p-4 rounded-md bg-red-50 mb-4">
+        Error: {error}
+      </div>
+    );
+  }
 
-            {loading ? (
-                <LoadingGrid />
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {units.map((unit) => (
-                        <Card 
-                            key={unit.id} 
-                            className="cursor-pointer hover:shadow-lg transition-shadow"
-                            onClick={() => router.push(`/admin/units/${unit.id}`)}
-                        >
-                            <CardHeader>
-                                <CardTitle className="flex justify-between items-center">
-                                    <span>{unit.name}</span>
-                                    <span className={`text-sm px-2 py-1 rounded-full ${
-                                        unit.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
-                                        unit.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-red-100 text-red-800'
-                                    }`}>
-                                        {unit.difficulty}
-                                    </span>
-                                </CardTitle>
-                                <CardDescription>{unit.description}</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div className="space-y-2">
-                                            <p className="text-muted-foreground">Lessons</p>
-                                            <p className="font-medium">{unit.lessons.length}</p>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <p className="text-muted-foreground">Completion</p>
-                                            <p className="font-medium">{unit.stats.completion_rate}%</p>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <p className="text-muted-foreground">Students</p>
-                                            <p className="font-medium">{unit.stats.completed_users}</p>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <p className="text-muted-foreground">Status</p>
-                                            <p className={`font-medium ${
-                                                unit.is_locked ? 'text-red-600' : 'text-green-600'
-                                            }`}>
-                                                {unit.is_locked ? 'Locked' : 'Active'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                            className="bg-primary h-2 rounded-full transition-all duration-300"
-                                            style={{ width: `${unit.stats.completion_rate}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            )}
-
-            {!loading && units.length === 0 && (
-                <div className="text-center py-12">
-                    <div className="w-full max-w-sm mx-auto space-y-4">
-                        <EmptyIcon className="h-12 w-12 mx-auto text-muted-foreground" />
-                        <div className="space-y-2">
-                            <h3 className="font-semibold text-lg">No units created</h3>
-                            <p className="text-muted-foreground">
-                                Get started by creating your first learning unit
-                            </p>
-                        </div>
-                        <Button 
-                            onClick={() => router.push("/admin/units/new")}
-                            className="mt-4"
-                        >
-                            Create Your First Unit
-                        </Button>
-                    </div>
-                </div>
-            )}
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Units</h2>
+          <p className="text-muted-foreground">
+            Manage all units across learning paths
+          </p>
         </div>
-    );
-}
+      </div>
 
-function PlusIcon(props: React.SVGProps<SVGSVGElement>) {
-    return (
-        <svg 
-            {...props}
-            xmlns="http://www.w3.org/2000/svg" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-        >
-            <path d="M12 5v14M5 12h14" />
-        </svg>
-    );
-}
+      <div className="grid gap-4">
+        {units.map((unit) => (
+          <Card key={unit.id} className="p-6">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Link href={`/admin/units/${unit.id}/view`}>
+                    <h3 className="font-semibold hover:underline">
+                      {unit.title}
+                    </h3>
+                  </Link>
+                  <span
+                    className={`inline-block px-2 py-1 text-xs rounded-full ${
+                      unit.is_published
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}
+                  >
+                    {unit.is_published ? 'Published' : 'Draft'}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {unit.description}
+                </p>
+                <div className="flex gap-2 text-sm text-muted-foreground">
+                  <span>Order: {unit.order}</span>
+                  <span>•</span>
+                  <span>Duration: {unit.estimated_duration} hours</span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant={unit.is_published ? "outline" : "default"}
+                  onClick={() => handleToggleStatus(unit.id)}
+                >
+                  {unit.is_published ? "Unpublish" : "Publish"}
+                </Button>
+                <Link href={`/admin/units/${unit.id}/view`}>
+                  <Button variant="outline">View</Button>
+                </Link>
+                <Link href={`/admin/units/${unit.id}`}>
+                  <Button variant="outline">Edit</Button>
+                </Link>
+                <AlertDialog
+                  trigger={
+                    <Button variant="outline" className="text-red-600 hover:text-red-700">
+                      Delete
+                    </Button>
+                  }
+                  title="Delete Unit"
+                  description="Are you sure you want to delete this unit? This action cannot be undone and will remove all associated lessons."
+                  confirmText="Delete"
+                  cancelText="Cancel"
+                  variant="destructive"
+                  onConfirm={() => handleDelete(unit.id)}
+                />
+              </div>
+            </div>
+          </Card>
+        ))}
 
-function EmptyIcon(props: React.SVGProps<SVGSVGElement>) {
-    return (
-        <svg 
-            {...props}
-            xmlns="http://www.w3.org/2000/svg" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-        >
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <path d="M12 8v8M8 12h8" />
-        </svg>
-    );
+        {units.length === 0 && (
+          <Card className="p-6">
+            <div className="text-center text-muted-foreground">
+              No units found.
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
 }

@@ -28,13 +28,13 @@ return new class extends Migration
                 ->comment('Additional version information');
             $table->timestamps();
 
-            // Add indexes for efficient queries
-            $table->index(['versionable_type', 'versionable_id', 'version_number']);
+            // Add indexes for efficient queries with shorter names
+            $table->index(['versionable_type', 'versionable_id', 'version_number'], 'cv_version_lookup_idx');
             $table->index('published_at');
             $table->index('created_at');
             
             // Ensure version numbers are unique per content item
-            $table->unique(['versionable_type', 'versionable_id', 'version_number'], 'unique_version_number');
+            $table->unique(['versionable_type', 'versionable_id', 'version_number'], 'cv_unique_version');
         });
     }
 

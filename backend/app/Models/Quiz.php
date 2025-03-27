@@ -17,13 +17,22 @@ class Quiz extends Model
     const AUDIT_AREA = 'quizzes';
 
     protected $fillable = [
-        'unit_id',
+        'lesson_id',
+        'section_id',
         'title',
-        'passing_score'
+        'slug',
+        'description',
+        'type',
+        'passing_score',
+        'time_limit',
+        'difficulty_level',
+        'is_published'
     ];
 
     protected $casts = [
-        'passing_score' => 'integer'
+        'passing_score' => 'integer',
+        'time_limit' => 'integer',
+        'is_published' => 'boolean'
     ];
 
     /**
@@ -59,6 +68,14 @@ class Quiz extends Model
     }
 
     /**
+     * Get all attempts for this quiz.
+     */
+    public function attempts(): HasMany
+    {
+        return $this->hasMany(QuizAttempt::class);
+    }
+
+    /**
      * Calculate the score for a set of answers
      */
     public function calculateScore(array $answers): float
@@ -80,49 +97,54 @@ class Quiz extends Model
     }
 
     /**
-     * Submit a quiz attempt and record progress
-     */
-    public function submitAttempt(int $userId, array $answers): array
-    {
-        $score = $this->calculateScore($answers);
-        $passed = $score >= $this->passing_score;
-
-        $this->progress()->updateOrCreate(
-            ['user_id' => $userId],
-            [
-                'status' => $passed ? 'completed' : 'failed',
-                'meta_data' => [
-                    'score' => $score,
-                    'passed' => $passed,
-                    'answers' => $answers,
-                    'attempt_date' => now()
-                ]
-            ]
-        );
-
-        return [
-            'score' => $score,
-            'passed' => $passed,
-            'required_score' => $this->passing_score
-        ];
-    }
-
-    /**
      * Get the best score for a user
      */
     public function getBestScore(int $userId): ?float
     {
-        $progress = $this->progress()
+        return $this->attempts()
             ->where('user_id', $userId)
-            ->get();
+            ->max('score');
+    }
 
-        if ($progress->isEmpty()) {
-            return null;
+    /**
+     * Check if a user has passed this quiz
+     */
+    public function hasUserPassed(int $userId): bool
+    {
+        return $this->attempts()
+            ->where('user_id', $userId)
+            ->where('passed', true)
+            ->exists();
+    }
+
+    /**
+     * Get question-level statistics
+     */
+    public function getQuestionStats(): array
+    {
+        $attempts = $this->attempts;
+        if ($attempts->isEmpty()) {
+            return [];
         }
 
-        return $progress->max(function ($attempt) {
-            return $attempt->meta_data['score'] ?? 0;
-        });
+        return $this->questions()
+            ->get()
+            ->map(function ($question) use ($attempts) {
+                $questionResults = $attempts->pluck('question_results')
+                    ->flatten(1)
+                    ->filter(fn($result) => $result['question_id'] === $question->id);
+
+                $totalAttempts = $questionResults->count();
+                $correctAttempts = $questionResults->filter(fn($result) => $result['correct'])->count();
+
+                return [
+                    'question_id' => $question->id,
+                    'question' => $question->question,
+                    'success_rate' => $totalAttempts > 0 ? ($correctAttempts / $totalAttempts) * 100 : 0,
+                    'total_attempts' => $totalAttempts
+                ];
+            })
+            ->toArray();
     }
 
     /**
@@ -153,34 +175,5 @@ class Quiz extends Model
         }
 
         return $quiz;
-    }
-
-    /**
-     * Get quiz statistics
-     */
-    public function getStatistics(): array
-    {
-        $attempts = $this->progress()->get();
-        $totalAttempts = $attempts->count();
-
-        if ($totalAttempts === 0) {
-            return [
-                'total_attempts' => 0,
-                'average_score' => 0,
-                'pass_rate' => 0,
-                'completion_rate' => 0
-            ];
-        }
-
-        $passedAttempts = $attempts->filter(function ($attempt) {
-            return ($attempt->meta_data['score'] ?? 0) >= $this->passing_score;
-        })->count();
-
-        return [
-            'total_attempts' => $totalAttempts,
-            'average_score' => $attempts->avg(fn($a) => $a->meta_data['score'] ?? 0),
-            'pass_rate' => ($passedAttempts / $totalAttempts) * 100,
-            'completion_rate' => ($attempts->unique('user_id')->count() / User::count()) * 100
-        ];
     }
 }

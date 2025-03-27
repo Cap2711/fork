@@ -13,6 +13,8 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('token')->unique();
             $table->foreignId('invited_by')->constrained('users');
+            $table->string('role');
+            $table->string('status')->default('pending');
             $table->timestamp('expires_at');
             $table->timestamp('used_at')->nullable();
             $table->timestamps();

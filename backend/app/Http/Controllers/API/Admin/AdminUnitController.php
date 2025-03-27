@@ -11,6 +11,8 @@ use App\Http\Requests\API\Unit\UpdateUnitRequest;
 use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Exception;
 
 class AdminUnitController extends BaseAPIController
 {
@@ -33,34 +35,42 @@ class AdminUnitController extends BaseAPIController
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Unit::query();
+        try {
+            $query = Unit::query();
 
-        // Apply filters
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+            // Apply filters
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->has('learning_path_id')) {
+                $query->whereHas('learningPaths', function ($query) use ($request) {
+                    $query->where('learning_paths.id', $request->learning_path_id);
+                });
+            }
+
+            // Include relationships if requested
+            if ($request->has('with_lessons')) {
+                $query->with(['lessons' => function ($query) {
+                    $query->orderBy('order');
+                }]);
+            }
+
+            if ($request->has('with_learning_paths')) {
+                $query->with('learningPaths');
+            }
+
+            $perPage = $request->input('per_page', 15);
+            $units = $query->paginate($perPage);
+
+            return $this->sendPaginatedResponse($units);
+        } catch (Exception $e) {
+            Log::error('Failed to fetch units: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
+            return $this->sendError('Failed to fetch units', ['error' => $e->getMessage()], 500);
         }
-
-        if ($request->has('learning_path_id')) {
-            $query->whereHas('learningPaths', function ($query) use ($request) {
-                $query->where('learning_paths.id', $request->learning_path_id);
-            });
-        }
-
-        // Include relationships if requested
-        if ($request->has('with_lessons')) {
-            $query->with(['lessons' => function ($query) {
-                $query->orderBy('order');
-            }]);
-        }
-
-        if ($request->has('with_learning_paths')) {
-            $query->with('learningPaths');
-        }
-
-        $perPage = $request->input('per_page', 15);
-        $units = $query->paginate($perPage);
-
-        return $this->sendPaginatedResponse($units);
     }
 
     /**
@@ -68,29 +78,37 @@ class AdminUnitController extends BaseAPIController
      */
     public function store(StoreUnitRequest $request): JsonResponse
     {
-        $unit = Unit::create($request->validated());
+        try {
+            $unit = Unit::create($request->validated());
 
-        // Attach to learning path if specified
-        if ($request->has('learning_path_id')) {
-            $learningPath = LearningPath::findOrFail($request->learning_path_id);
-            
-            // Get the highest order in the learning path
-            $maxOrder = $learningPath->units()->max('order') ?? 0;
-            
-            // Attach with the next order
-            $learningPath->units()->attach($unit->id, ['order' => $maxOrder + 1]);
+            // Attach to learning path if specified
+            if ($request->has('learning_path_id')) {
+                $learningPath = LearningPath::findOrFail($request->learning_path_id);
+                
+                // Get the highest order in the learning path
+                $maxOrder = $learningPath->units()->max('order') ?? 0;
+                
+                // Attach with the next order
+                $learningPath->units()->attach($unit->id, ['order' => $maxOrder + 1]);
+            }
+
+            // Log the creation for audit trail
+            AuditLog::log(
+                'create',
+                'units',
+                $unit,
+                [],
+                $request->validated()
+            );
+
+            return $this->sendCreatedResponse($unit, 'Unit created successfully.');
+        } catch (Exception $e) {
+            Log::error('Failed to create unit: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'data' => $request->validated()
+            ]);
+            return $this->sendError('Failed to create unit', ['error' => $e->getMessage()], 500);
         }
-
-        // Log the creation for audit trail
-        AuditLog::log(
-            'create',
-            'units',
-            $unit,
-            [],
-            $request->validated()
-        );
-
-        return $this->sendCreatedResponse($unit, 'Unit created successfully.');
     }
 
     /**
@@ -99,28 +117,36 @@ class AdminUnitController extends BaseAPIController
      */
     public function show(Request $request, Unit $unit): JsonResponse
     {
-        // Load relationships if requested
-        if ($request->has('with_lessons')) {
-            $unit->load(['lessons' => function ($query) {
-                $query->orderBy('order');
-            }]);
-        }
+        try {
+            // Load relationships if requested
+            if ($request->has('with_lessons')) {
+                $unit->load(['lessons' => function ($query) {
+                    $query->orderBy('order');
+                }]);
+            }
 
-        if ($request->has('with_learning_paths')) {
-            $unit->load('learningPaths');
-        }
+            if ($request->has('with_learning_paths')) {
+                $unit->load('learningPaths');
+            }
 
-        if ($request->has('with_versions')) {
-            // Load version history if requested
-            $unit->load('versions');
-        }
+            if ($request->has('with_versions')) {
+                // Load version history if requested
+                $unit->load('versions');
+            }
 
-        if ($request->has('with_reviews')) {
-            // Load reviews if requested
-            $unit->load('reviews');
-        }
+            if ($request->has('with_reviews')) {
+                // Load reviews if requested
+                $unit->load('reviews');
+            }
 
-        return $this->sendResponse($unit);
+            return $this->sendResponse($unit);
+        } catch (Exception $e) {
+            Log::error('Failed to fetch unit: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'unit_id' => $unit->id
+            ]);
+            return $this->sendError('Failed to fetch unit', ['error' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -128,18 +154,27 @@ class AdminUnitController extends BaseAPIController
      */
     public function update(UpdateUnitRequest $request, Unit $unit): JsonResponse
     {
-        $oldData = $unit->toArray();
-        $unit->update($request->validated());
+        try {
+            $oldData = $unit->toArray();
+            $unit->update($request->validated());
 
-        // Log the update for audit trail
-        AuditLog::logChange(
-            $unit,
-            'update',
-            $oldData,
-            $unit->toArray()
-        );
+            // Log the update for audit trail
+            AuditLog::logChange(
+                $unit,
+                'update',
+                $oldData,
+                $unit->toArray()
+            );
 
-        return $this->sendResponse($unit, 'Unit updated successfully.');
+            return $this->sendResponse($unit, 'Unit updated successfully.');
+        } catch (Exception $e) {
+            Log::error('Failed to update unit: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'unit_id' => $unit->id,
+                'data' => $request->validated()
+            ]);
+            return $this->sendError('Failed to update unit', ['error' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -148,28 +183,36 @@ class AdminUnitController extends BaseAPIController
      */
     public function destroy(Request $request, Unit $unit): JsonResponse
     {
-        // Prevent deletion of published units
-        if ($unit->status === 'published') {
-            return $this->sendError('Cannot delete a published unit. Archive it first.', ['status' => 422]);
+        try {
+            // Prevent deletion of published units
+            if ($unit->status === 'published') {
+                return $this->sendError('Cannot delete a published unit. Archive it first.', ['status' => 422]);
+            }
+
+            $data = $unit->toArray();
+            
+            // Detach from all learning paths
+            $unit->learningPaths()->detach();
+            
+            $unit->delete();
+
+            // Log the deletion for audit trail
+            AuditLog::log(
+                'delete',
+                'units',
+                $unit,
+                $data,
+                []
+            );
+
+            return $this->sendNoContentResponse();
+        } catch (Exception $e) {
+            Log::error('Failed to delete unit: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'unit_id' => $unit->id
+            ]);
+            return $this->sendError('Failed to delete unit', ['error' => $e->getMessage()], 500);
         }
-
-        $data = $unit->toArray();
-        
-        // Detach from all learning paths
-        $unit->learningPaths()->detach();
-        
-        $unit->delete();
-
-        // Log the deletion for audit trail
-        AuditLog::log(
-            'delete',
-            'units',
-            $unit,
-            $data,
-            []
-        );
-
-        return $this->sendNoContentResponse();
     }
 
     /**
@@ -178,24 +221,33 @@ class AdminUnitController extends BaseAPIController
      */
     public function updateStatus(Request $request, Unit $unit): JsonResponse
     {
-        $request->validate([
-            'status' => ['required', 'string', 'in:draft,published,archived']
-        ]);
+        try {
+            $request->validate([
+                'status' => ['required', 'string', 'in:draft,published,archived']
+            ]);
 
-        $oldStatus = $unit->status;
-        $unit->status = $request->status;
-        $unit->save();
+            $oldStatus = $unit->status;
+            $unit->status = $request->status;
+            $unit->save();
 
-        // Log the status change for audit trail
-        AuditLog::log(
-            'status_update',
-            'units',
-            $unit,
-            ['status' => $oldStatus],
-            ['status' => $request->status]
-        );
+            // Log the status change for audit trail
+            AuditLog::log(
+                'status_update',
+                'units',
+                $unit,
+                ['status' => $oldStatus],
+                ['status' => $request->status]
+            );
 
-        return $this->sendResponse($unit, 'Unit status updated successfully.');
+            return $this->sendResponse($unit, 'Unit status updated successfully.');
+        } catch (Exception $e) {
+            Log::error('Failed to update unit status: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'unit_id' => $unit->id,
+                'status' => $request->status ?? null
+            ]);
+            return $this->sendError('Failed to update unit status', ['error' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -204,19 +256,28 @@ class AdminUnitController extends BaseAPIController
      */
     public function reorderLessons(Request $request, Unit $unit): JsonResponse
     {
-        $request->validate([
-            'lesson_ids' => ['required', 'array'],
-            'lesson_ids.*' => ['exists:lessons,id']
-        ]);
+        try {
+            $request->validate([
+                'lesson_ids' => ['required', 'array'],
+                'lesson_ids.*' => ['exists:lessons,id']
+            ]);
 
-        $lessonIds = $request->lesson_ids;
-        
-        // Update the order of each lesson
-        foreach ($lessonIds as $index => $lessonId) {
-            $unit->lessons()->updateExistingPivot($lessonId, ['order' => $index + 1]);
+            $lessonIds = $request->lesson_ids;
+            
+            // Update the order of each lesson
+            foreach ($lessonIds as $index => $lessonId) {
+                $unit->lessons()->updateExistingPivot($lessonId, ['order' => $index + 1]);
+            }
+
+            return $this->sendResponse($unit->load('lessons'), 'Lessons reordered successfully.');
+        } catch (Exception $e) {
+            Log::error('Failed to reorder lessons: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'unit_id' => $unit->id,
+                'lesson_ids' => $request->lesson_ids ?? []
+            ]);
+            return $this->sendError('Failed to reorder lessons', ['error' => $e->getMessage()], 500);
         }
-
-        return $this->sendResponse($unit->load('lessons'), 'Lessons reordered successfully.');
     }
 
     /**
@@ -224,35 +285,44 @@ class AdminUnitController extends BaseAPIController
      */
     public function submitForReview(Request $request, Unit $unit): JsonResponse
     {
-        // Validate that the unit is in draft status
-        if ($unit->status !== 'draft') {
-            return $this->sendError('Only draft units can be submitted for review.', ['error' => 'Only draft units can be submitted for review.'], 422);
+        try {
+            // Validate that the unit is in draft status
+            if ($unit->status !== 'draft') {
+                return $this->sendError('Only draft units can be submitted for review.', ['error' => 'Only draft units can be submitted for review.'], 422);
+            }
+
+            // Update the unit status to 'in_review'
+            $unit->review_status = 'pending';
+            $unit->save();
+
+            // Create a review record
+            $review = $unit->reviews()->create([
+                'submitted_by' => $request->user()->id,
+                'status' => 'pending',
+                'submitted_at' => now(),
+            ]);
+
+            // Notify reviewers (to be implemented)
+            // $this->notifyReviewers($unit, $review);
+
+            // Log the review submission
+            AuditLog::log(
+                'submit_for_review',
+                'units',
+                $unit,
+                [],
+                ['review_id' => $review->id]
+            );
+
+            return $this->sendResponse($unit, 'Unit submitted for review successfully.');
+        } catch (Exception $e) {
+            Log::error('Failed to submit unit for review: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'unit_id' => $unit->id,
+                'user_id' => $request->user() ? $request->user()->id : null
+            ]);
+            return $this->sendError('Failed to submit unit for review', ['error' => $e->getMessage()], 500);
         }
-
-        // Update the unit status to 'in_review'
-        $unit->review_status = 'pending';
-        $unit->save();
-
-        // Create a review record
-        $review = $unit->reviews()->create([
-            'submitted_by' => $request->user()->id,
-            'status' => 'pending',
-            'submitted_at' => now(),
-        ]);
-
-        // Notify reviewers (to be implemented)
-        // $this->notifyReviewers($unit, $review);
-
-        // Log the review submission
-        AuditLog::log(
-            'submit_for_review',
-            'units',
-            $unit,
-            [],
-            ['review_id' => $review->id]
-        );
-
-        return $this->sendResponse($unit, 'Unit submitted for review successfully.');
     }
 
     /**
@@ -260,47 +330,53 @@ class AdminUnitController extends BaseAPIController
      */
     public function approveReview(Request $request, Unit $unit): JsonResponse
     {
-        // Validate that the unit is in review status
-        if ($unit->review_status !== 'pending') {
-            return $this->sendError('This unit is not pending review.', ['error' => 'This unit is not pending review.'], 422);
+        try {
+            // Validate that the unit is in review status
+            if ($unit->review_status !== 'pending') {
+                return $this->sendError('This unit is not pending review.', ['error' => 'This unit is not pending review.'], 422);
+            }
+
+            $request->validate([
+                'review_comment' => ['nullable', 'string', 'max:1000'],
+            ]);
+
+            // Get the latest pending review
+            $review = $unit->reviews()->where('status', 'pending')->latest()->first();
+            
+            if (!$review) {
+                return $this->sendError('No pending review found for this unit.', ['error' => 'No pending review found for this unit.'], 404);
+            }
+
+            // Update the review
+            $review->update([
+                'reviewed_by' => $request->user()->id,
+                'status' => 'approved',
+                'review_comment' => $request->review_comment,
+                'reviewed_at' => now(),
+            ]);
+
+            // Update the unit status
+            $unit->review_status = 'approved';
+            $unit->save();
+
+            // Log the review approval
+            AuditLog::log(
+                'review_approved',
+                'units',
+                $unit,
+                [],
+                ['review_id' => $review->id]
+            );
+
+            return $this->sendResponse($unit, 'Unit review approved successfully.');
+        } catch (Exception $e) {
+            Log::error('Failed to approve unit review: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'unit_id' => $unit->id,
+                'user_id' => $request->user() ? $request->user()->id : null
+            ]);
+            return $this->sendError('Failed to approve unit review', ['error' => $e->getMessage()], 500);
         }
-
-        $request->validate([
-            'review_comment' => ['nullable', 'string', 'max:1000'],
-        ]);
-
-        // Get the latest pending review
-        $review = $unit->reviews()->where('status', 'pending')->latest()->first();
-        
-        if (!$review) {
-            return $this->sendError('No pending review found for this unit.', ['error' => 'No pending review found for this unit.'], 404);
-        }
-
-        // Update the review
-        $review->update([
-            'reviewed_by' => $request->user()->id,
-            'status' => 'approved',
-            'review_comment' => $request->review_comment,
-            'reviewed_at' => now(),
-        ]);
-
-        // Update the unit status
-        $unit->review_status = 'approved';
-        $unit->save();
-
-        // Notify the content creator (to be implemented)
-        // $this->notifyContentCreator($unit, $review, 'approved');
-
-        // Log the review approval
-        AuditLog::log(
-            'review_approved',
-            'units',
-            $unit,
-            [],
-            ['review_id' => $review->id]
-        );
-
-        return $this->sendResponse($unit, 'Unit review approved successfully.');
     }
 
     /**
@@ -308,51 +384,58 @@ class AdminUnitController extends BaseAPIController
      */
     public function rejectReview(Request $request, Unit $unit): JsonResponse
     {
-        // Validate that the unit is in review status
-        if ($unit->review_status !== 'pending') {
-            return $this->sendError('This unit is not pending review.', ['error' => 'This unit is not pending review.'], 422);
+        try {
+            // Validate that the unit is in review status
+            if ($unit->review_status !== 'pending') {
+                return $this->sendError('This unit is not pending review.', ['error' => 'This unit is not pending review.'], 422);
+            }
+
+            $request->validate([
+                'review_comment' => ['required', 'string', 'max:1000'],
+                'rejection_reason' => ['required', 'string', 'in:content_issues,formatting_issues,accuracy_issues,other'],
+            ]);
+
+            // Get the latest pending review
+            $review = $unit->reviews()->where('status', 'pending')->latest()->first();
+            
+            if (!$review) {
+                return $this->sendError('No pending review found for this unit.', ['error' => 'No pending review found for this unit.'], 404);
+            }
+
+            // Update the review
+            $review->update([
+                'reviewed_by' => $request->user()->id,
+                'status' => 'rejected',
+                'review_comment' => $request->review_comment,
+                'rejection_reason' => $request->rejection_reason,
+                'reviewed_at' => now(),
+            ]);
+
+            // Update the unit status
+            $unit->review_status = 'rejected';
+            $unit->save();
+
+            // Log the review rejection
+            AuditLog::log(
+                'review_rejected',
+                'units',
+                $unit,
+                [],
+                [
+                    'review_id' => $review->id,
+                    'rejection_reason' => $request->rejection_reason
+                ]
+            );
+
+            return $this->sendResponse($unit, 'Unit review rejected successfully.');
+        } catch (Exception $e) {
+            Log::error('Failed to reject unit review: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'unit_id' => $unit->id,
+                'user_id' => $request->user() ? $request->user()->id : null,
+                'rejection_reason' => $request->rejection_reason ?? null
+            ]);
+            return $this->sendError('Failed to reject unit review', ['error' => $e->getMessage()], 500);
         }
-
-        $request->validate([
-            'review_comment' => ['required', 'string', 'max:1000'],
-            'rejection_reason' => ['required', 'string', 'in:content_issues,formatting_issues,accuracy_issues,other'],
-        ]);
-
-        // Get the latest pending review
-        $review = $unit->reviews()->where('status', 'pending')->latest()->first();
-        
-        if (!$review) {
-            return $this->sendError('No pending review found for this unit.', ['error' => 'No pending review found for this unit.'], 404);
-        }
-
-        // Update the review
-        $review->update([
-            'reviewed_by' => $request->user()->id,
-            'status' => 'rejected',
-            'review_comment' => $request->review_comment,
-            'rejection_reason' => $request->rejection_reason,
-            'reviewed_at' => now(),
-        ]);
-
-        // Update the unit status
-        $unit->review_status = 'rejected';
-        $unit->save();
-
-        // Notify the content creator (to be implemented)
-        // $this->notifyContentCreator($unit, $review, 'rejected');
-
-        // Log the review rejection
-        AuditLog::log(
-            'review_rejected',
-            'units',
-            $unit,
-            [],
-            [
-                'review_id' => $review->id,
-                'rejection_reason' => $request->rejection_reason
-            ]
-        );
-
-        return $this->sendResponse($unit, 'Unit review rejected successfully.');
     }
 }

@@ -1,12 +1,16 @@
 <?php
 
+use Illuminate\Support\Facades\Route;
+
 use App\Http\Controllers\API\Admin\{
     AdminDashboardController,
     AdminInviteController,
     AdminMediaController,
     AdminAuditController,
     AdminAnalyticsController,
-    AdminRoleController
+    AdminRoleController,
+    AdminGamificationController,
+    AdminLanguageController
 };
 
 use App\Http\Controllers\API\Admin\{
@@ -19,14 +23,75 @@ use App\Http\Controllers\API\Admin\{
     AdminQuizQuestionController,
     AdminVocabularyController,
     AdminGuideBookEntryController,
-    AdminContentController,
-    AdminProgressController
+    AdminProgressController,
+    AdminSentenceController,
+    AdminWordController
 };
 
 Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // Dashboard & Analytics
     Route::get('dashboard', [AdminDashboardController::class, 'index']);
+    Route::get('dashboard/engagement', [AdminDashboardController::class, 'engagement']);
+    Route::get('dashboard/progress', [AdminDashboardController::class, 'progress']);
+    Route::get('dashboard/achievements', [AdminDashboardController::class, 'achievements']);
+    Route::get('dashboard/leaderboards', [AdminDashboardController::class, 'leaderboards']);
+    Route::get('dashboard/content-health', [AdminDashboardController::class, 'contentHealth']);
     Route::get('analytics', [AdminAnalyticsController::class, 'index']);
+
+    // Language Management
+    Route::prefix('languages')->group(function () {
+        Route::get('/', [AdminLanguageController::class, 'index']);
+        Route::post('/', [AdminLanguageController::class, 'store']);
+        Route::get('{language}', [AdminLanguageController::class, 'show']);
+        Route::put('{language}', [AdminLanguageController::class, 'update']);
+        Route::patch('{language}/status', [AdminLanguageController::class, 'updateStatus']);
+        
+        // Language Pairs
+        Route::post('pairs', [AdminLanguageController::class, 'createPair']);
+        Route::delete('pairs/{source}/{target}', [AdminLanguageController::class, 'deletePair']);
+        Route::patch('pairs/{source}/{target}/status', [AdminLanguageController::class, 'updatePairStatus']);
+    });
+
+    // Word Management
+    Route::prefix('words')->group(function () {
+        Route::get('/', [AdminWordController::class, 'index']);
+        Route::post('/', [AdminWordController::class, 'store']);
+        Route::get('{word}', [AdminWordController::class, 'show']);
+        Route::put('{word}', [AdminWordController::class, 'update']);
+        Route::delete('{word}', [AdminWordController::class, 'destroy']);
+        
+        // Word Translations
+        Route::post('{word}/translations', [AdminWordController::class, 'addTranslation']);
+        Route::put('{word}/translations/{translation}', [AdminWordController::class, 'updateTranslation']);
+        Route::delete('{word}/translations/{translation}', [AdminWordController::class, 'deleteTranslation']);
+        
+        // Word Audio
+        Route::post('{word}/audio', [AdminWordController::class, 'uploadAudio']);
+        Route::post('{word}/translations/{translation}/audio', [AdminWordController::class, 'uploadTranslationAudio']);
+    });
+
+    // Sentence Management
+    Route::prefix('sentences')->group(function () {
+        Route::get('/', [AdminSentenceController::class, 'index']);
+        Route::post('/', [AdminSentenceController::class, 'store']);
+        Route::get('{sentence}', [AdminSentenceController::class, 'show']);
+        Route::put('{sentence}', [AdminSentenceController::class, 'update']);
+        Route::delete('{sentence}', [AdminSentenceController::class, 'destroy']);
+        
+        // Sentence Translations
+        Route::post('{sentence}/translations', [AdminSentenceController::class, 'addTranslation']);
+        Route::put('{sentence}/translations/{translation}', [AdminSentenceController::class, 'updateTranslation']);
+        Route::delete('{sentence}/translations/{translation}', [AdminSentenceController::class, 'deleteTranslation']);
+        
+        // Sentence Audio
+        Route::post('{sentence}/audio', [AdminSentenceController::class, 'uploadAudio']);
+        Route::post('{sentence}/audio-slow', [AdminSentenceController::class, 'uploadSlowAudio']);
+        Route::post('{sentence}/translations/{translation}/audio', [AdminSentenceController::class, 'uploadTranslationAudio']);
+        
+        // Word Timings
+        Route::put('{sentence}/word-timings', [AdminSentenceController::class, 'updateWordTimings']);
+        Route::put('{sentence}/words/reorder', [AdminSentenceController::class, 'reorderWords']);
+    });
 
     // Content Management - Full CRUD operations for admins
     Route::apiResource('learning-paths', AdminLearningPathController::class);
@@ -75,14 +140,6 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(functi
         Route::post('{section}/reorder-exercises', [AdminSectionController::class, 'reorderExercises']);
     });
 
-    // Content Version Management
-    Route::prefix('content')->group(function () {
-        Route::post('{type}/{id}/publish', [AdminContentController::class, 'publish']);
-        Route::post('{type}/{id}/unpublish', [AdminContentController::class, 'unpublish']);
-        Route::get('{type}/{id}/versions', [AdminContentController::class, 'versions']);
-        Route::post('{type}/{id}/restore/{version}', [AdminContentController::class, 'restore']);
-    });
-
     // Progress Management
     Route::prefix('progress')->group(function () {
         Route::get('overview', [AdminProgressController::class, 'overview']);
@@ -100,6 +157,7 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(functi
     Route::prefix('users')->group(function () {
         Route::post('invite', [AdminInviteController::class, 'send']);
         Route::delete('invite/{invite}', [AdminInviteController::class, 'cancel']);
+        Route::post('invite/{invite}/resend', [AdminInviteController::class, 'resend']);
     });
 
     // Roles & Permissions
@@ -108,5 +166,18 @@ Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(functi
 
     // Audit Logs
     Route::get('audit-logs', [AdminAuditController::class, 'index']);
+    Route::get('audit-logs/export', [AdminAuditController::class, 'export']);
     Route::get('audit-logs/{log}', [AdminAuditController::class, 'show']);
+
+    // Gamification Management
+    Route::prefix('gamification')->group(function () {
+        Route::post('achievements', [AdminGamificationController::class, 'createAchievement']);
+        Route::put('achievements/{achievement}', [AdminGamificationController::class, 'updateAchievement']);
+        Route::post('xp-rules', [AdminGamificationController::class, 'configureXpRules']);
+        Route::post('leagues', [AdminGamificationController::class, 'configureLeagues']);
+        Route::post('streak-rules', [AdminGamificationController::class, 'configureStreakRules']);
+        Route::post('daily-goals', [AdminGamificationController::class, 'configureDailyGoals']);
+        Route::post('bonus-events', [AdminGamificationController::class, 'createBonusEvent']);
+        Route::get('statistics', [AdminGamificationController::class, 'getStatistics']);
+    });
 });

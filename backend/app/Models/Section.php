@@ -20,12 +20,18 @@ class Section extends Model
     protected $fillable = [
         'lesson_id',
         'title',
+        'slug',
+        'description',
+        'type',
         'content',
-        'order'
+        'order',
+        'status',
+        'review_status'
     ];
 
     protected $casts = [
-        'order' => 'integer'
+        'order' => 'integer',  'status' => 'string',
+        'review_status' => 'string'
     ];
 
     /**
