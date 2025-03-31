@@ -21,13 +21,15 @@ class GoogleController extends BaseAPIController
      * @var array
      */
     protected $allowedDomains = [
-        'example.com', // TODO: Replace with actual allowed domains
+        'gmail.com',
+        'keyin.com'
     ];
 
-    public function redirectToGoogle()
+    public function getAuthUrl()
     {
         try {
             $redirectUrl = Socialite::driver('google')
+                ->stateless()
                 ->redirect()
                 ->getTargetUrl();
 
@@ -57,6 +59,7 @@ class GoogleController extends BaseAPIController
     {
         try {
             $googleUser = Socialite::driver('google')
+                ->stateless()
                 ->user();
 
             // Validate Google user data
@@ -158,9 +161,15 @@ class GoogleController extends BaseAPIController
                 return $this->sendError('Authentication failed', ['error' => 'Failed to create authentication token'], 500);
             }
 
+            // Add redirect URL based on user role
+            $redirectUrl = $user->role === 'admin' 
+                ? 'http://localhost:3000/admin' 
+                : 'http://localhost:3000/learn';
+
             return $this->sendResponse([
                 'token' => $token,
                 'user' => $user,
+                'redirect_url' => $redirectUrl
             ], 'Successfully logged in with Google');
 
         } catch (InvalidStateException $e) {
