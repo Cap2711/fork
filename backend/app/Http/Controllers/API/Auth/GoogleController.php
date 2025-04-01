@@ -166,11 +166,7 @@ class GoogleController extends BaseAPIController
                 ? 'http://localhost:3000/admin' 
                 : 'http://localhost:3000/learn';
 
-            return $this->sendResponse([
-                'token' => $token,
-                'user' => $user,
-                'redirect_url' => $redirectUrl
-            ], 'Successfully logged in with Google');
+            return redirect($redirectUrl . '?token=' . $token);
 
         } catch (InvalidStateException $e) {
             Log::error('Invalid OAuth state: ' . $e->getMessage());
